@@ -286,6 +286,34 @@ dist/lib/
   [이전 15개 + libdbus-1.so.3 신규]
 ```
 
+### Phase 10 — 치명적 순환 dlopen 수정 + libssl 사전 로드 ✅
+- 날짜: 2026-07-03
+
+**libcrypto3_compat.c — 순환 dlopen 버그 수정 (CRITICAL)**:
+- 문제: constructor의 candidates 배열 첫 항목이 `"libcrypto.so.3"`, `"libcrypto.so"` (SONAME)
+- 우리 스텁이 LD_LIBRARY_PATH에 `libcrypto.so.3`으로 배치되어 있을 때, `dlopen("libcrypto.so.3")` 가 자기 자신을 로드
+- 동적 링커가 이미 로딩 중인 스텁 핸들을 반환하지만 심볼이 아직 등록되지 않아 모든 dlsym()이 NULL
+- 결과: 36개 OpenSSL 함수 포인터 전부 NULL → TLS/HTTPS 완전 불능
+- **수정**: candidates를 절대 경로만으로 교체:
+  ```
+  /usr/lib/aarch64-linux-gnu/libcrypto.so.3
+  /usr/lib64/libcrypto.so.3  
+  /usr/lib/libcrypto.so.3
+  /lib/aarch64-linux-gnu/libcrypto.so.3
+  /usr/lib/aarch64-linux-gnu/libcrypto.so.1.1
+  /usr/lib64/libcrypto.so.1.1
+  /usr/lib/libcrypto.so.1.1
+  /lib/aarch64-linux-gnu/libcrypto.so.1.1
+  ```
+
+**libcurl_stub.c — libssl 사전 로드 추가**:
+- 문제: 시스템 libcurl.so.4는 libssl.so.3에 전이 의존성을 가짐
+- Tizen에서 libssl이 비표준 경로에 있으면 `dlopen(libcurl.so.4)` 실패
+- **수정**: curl_stub_init() constructor에서 libcurl 로드 전에 libssl을 RTLD_GLOBAL로 사전 로드
+- libssl.so.3 및 libssl.so.1.1 경로 모두 시도 (OpenSSL 버전 호환)
+
+**빌드 결과**: 경고/오류 0건, 기존 17개 타겟 모두 정상 빌드
+
 ---
 
 ## 남은 작업
