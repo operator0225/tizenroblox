@@ -184,5 +184,40 @@ if [ ! -f "${PREFIX}/lib/libxml2.a" ]; then
     make install
 fi
 
-echo "[thirdparty] zlib + OpenSSL + curl + libxml2 ready. Remaining libs:"
-echo "[thirdparty] libffi, pcre2, glib, freetype, expat, fontconfig — see PROGRESS.md Phase 12."
+# ── libffi (static) ───────────────────────────────────────────────────────
+# Ubuntu's deb-src libffi_3.4.6 ships without a pre-generated ./configure
+# and its configure.ac references LT_SYS_SYMBOL_USCORE, a macro missing
+# from this Ubuntu's libtool.m4 (2.4.7) — autoreconf fails. Use upstream
+# 3.4.3 from sourceware.org instead, which ships configure pre-generated.
+fetch "https://sourceware.org/pub/libffi/libffi-3.4.3.tar.gz"
+[ -d "${SRC_DIR}/libffi-3.4.3" ] || (cd "${SRC_DIR}" && tar xzf libffi-3.4.3.tar.gz)
+if [ ! -f "${PREFIX}/lib/libffi.a" ]; then
+    echo "[thirdparty] Building libffi..."
+    cd "${SRC_DIR}/libffi-3.4.3"
+    ./configure --host="${HOST}" --prefix="${PREFIX}" \
+        --disable-shared --enable-static \
+        CC="${CC}" AR="${AR}" RANLIB="${RANLIB}" \
+        CFLAGS="-O2 -fPIC -fvisibility=default"
+    make -j"$(nproc)"
+    cd aarch64-unknown-linux-gnu
+    degrade_isoc23_symbols .libs/libffi.a
+    make install
+fi
+
+# ── pcre2 (static, 8-bit only) ────────────────────────────────────────────
+if [ ! -f "${PREFIX}/lib/libpcre2-8.a" ]; then
+    echo "[thirdparty] Building pcre2..."
+    cd "${SRC_DIR}/pcre2-10.42"
+    ./configure --host="${HOST}" --prefix="${PREFIX}" \
+        --disable-shared --enable-static \
+        --enable-pcre2-8 --disable-pcre2-16 --disable-pcre2-32 \
+        --disable-pcre2grep-libz --disable-pcre2grep-libbz2 \
+        CC="${CC}" AR="${AR}" RANLIB="${RANLIB}" \
+        CFLAGS="-O2 -fPIC -fvisibility=default"
+    make -j"$(nproc)"
+    degrade_isoc23_symbols .libs/libpcre2-8.a
+    make install
+fi
+
+echo "[thirdparty] zlib + OpenSSL + curl + libxml2 + libffi + pcre2 ready."
+echo "[thirdparty] Remaining: glib, freetype, expat, fontconfig — see PROGRESS.md Phase 12."
