@@ -201,6 +201,57 @@ dist/lib/
   libcurl.so.4         (shim)
 ```
 
+### Phase 8 — SDL2 Wayland 커버리지 + 성능 최적화 + 진단 도구 ✅
+- 날짜: 2026-07-03
+
+**SDL2 Wayland 라이브러리 분석**:
+- sober 바이너리에서 SDL2 feature probe JSON 발견
+- SDL2가 dlopen으로 탐지하는 선택적 라이브러리 목록 완전 파악:
+  - Wayland 표시: libwayland-client.so.0, libwayland-egl.so.1, libwayland-cursor.so.0
+  - 키보드: libxkbcommon.so.0
+  - 오디오: libasound.so.2 (ALSA), libpulse.so.0 (PulseAudio)
+  - 입력 핫플러그: libudev.so.1
+  - GPU: libEGL.so.1, libGLESv2.so.2 (Tizen TV 드라이버 제공)
+
+**tizen/launch.sh 개선**:
+- `try_symlink_lib()` 함수 추가: 시스템 경로에서 라이브러리 탐색 후 lib/에 심볼릭 링크 생성
+- Wayland 클라이언트 libs 자동 심볼릭 링크 (SDL2 화면 출력 필수)
+- 오디오 libs 자동 심볼릭 링크 (ALSA/PulseAudio)
+- GL 셰이더 캐시 경로 설정 (`~/.cache/sober/gl_shaders`)
+- CPU 성능 거버너 설정 시도 (`/sys/devices/system/cpu/*/cpufreq/scaling_governor`)
+- `SDL_VIDEODRIVER=wayland` 명시 설정
+
+**stub/libwayland_stub.c** — Wayland passthrough 스텁:
+- SDL2가 Wayland 백엔드를 활성화하려면 libwayland-client.so.0이 필요
+- Tizen에 실제 libwayland가 있는 경우: 런처가 심볼릭 링크 생성 (이 스텁 사용 안 함)
+- 없는 경우 최후 수단 폴백: wl_display_connect() → 내부에서 dlopen 재시도
+- 15개 wl_display/registry/surface/proxy 함수 + wl_egl_window + wl_cursor 구현
+- xdg_wm_base, xdg_surface, xdg_toplevel 인터페이스 객체 포함
+
+**scripts/diagnose.sh** — 런타임 환경 진단:
+- 아키텍처, 커널, /dev/uinput 권한 확인
+- sober 바이너리 + bundled libs 존재 확인
+- Wayland 소켓 탐지
+- 모든 SDL2 선택적 라이브러리 (wayland, audio, xkb, udev) 확인
+- GPU/EGL 확인
+- 12개 TizenRoblox 스텁 라이브러리 확인
+- 입력 장치 (삼성 리모컨, 게임패드) 탐지
+- 자격증명 파일 확인
+- PASS/WARN/FAIL 요약 출력
+
+**OpenSSL 심볼 완성**:
+- libcrypto3_compat.c: ASN1, ERR, OBJ, i2d_X509 36개 심볼 완전 구현
+- `_GNU_SOURCE` 중복 정의 경고 수정 (`#ifndef` 가드)
+
+**빌드 결과** (aarch64, 경고/오류 없음, 16개 타겟):
+```
+dist/lib/
+  [이전 12개 스텁] +
+  libwayland-client.so.0   (Wayland 폴백 스텁)
+  libwayland-egl.so.1      (Wayland EGL 폴백 스텁)
+  libwayland-cursor.so.0   (Wayland 커서 폴백 스텁)
+```
+
 ---
 
 ## 남은 작업
@@ -208,17 +259,16 @@ dist/lib/
 ### 단기 (TV 배포 전)
 - [ ] Sober Flatpak에서 바이너리 추출: `bash scripts/extract_sober.sh <flatpak>`
 - [ ] 빌드: `bash scripts/build.sh`
-- [ ] 자격증명 설정: `bash scripts/setup.sh`
-- [ ] TV 배포: `bash scripts/deploy.sh <TV_IP>` 또는 `bash scripts/deploy_sdb.sh <TV_IP>`
+- [ ] TV 배포: `bash scripts/deploy.sh <TV_IP>`
+- [ ] **진단 실행**: `ssh root@<TV_IP> bash /opt/tizenroblox/scripts/diagnose.sh`
+- [ ] 자격증명 설정: `bash scripts/setup.sh` (진단 후 경고 있을 경우)
 - [ ] TV에서 실행: `ssh root@<TV_IP> /opt/tizenroblox/bin/launch.sh`
-- [ ] /dev/uinput 권한 확인 (root 또는 input 그룹 필요)
-- [ ] Wayland 소켓 경로 확인 (`/run/display/` vs `/tmp/.RTE/`)
 
 ### 중기 (기능 향상)
 - [ ] 실제 TV에서 Wayland EGL 초기화 테스트
 - [ ] 오디오 확인 (Tizen ALSA/PulseAudio 호환성)
 - [ ] GStreamer 비디오 파이프라인 테스트 (인게임 영상)
-- [ ] 성능 프로파일링 (NQ4 AI Gen3 SoC, 4-8GB RAM)
+- [ ] 성능 프로파일링 (NQ4 AI Gen3 SoC, 8GB RAM)
 - [ ] HDR10+ / 4K 출력 최적화
 
 ### 장기 (완성도)
@@ -226,11 +276,6 @@ dist/lib/
 - [ ] 자동 Roblox 버전 업데이트
 - [ ] 멀티플레이어 네트워크 테스트
 - [ ] 게임패드 매핑 UI (Samsung OneRemote 설정)
-
-### 장기
-- [ ] Tizen 앱 패키지화 (.tpk) — TV 런처에서 직접 실행
-- [ ] 자동 업데이트 (Sober 새 버전 배포)
-- [ ] 멀티플레이어 네트워크 (Tizen 방화벽 설정)
 
 ---
 
