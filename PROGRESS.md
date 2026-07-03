@@ -341,15 +341,93 @@ dist/lib/
 - libcrypto, libcurl, libxml2 순환 dlopen 버그 전부 수정 완료
 - 모든 위임 스텁이 절대 경로만 사용 확인
 
+### Phase 12 — 핵심 라이브러리 실제 바이너리 정적 번들링 (Android 앱 방식 전환) ✅
+- 날짜: 2026-07-03
+
+**전략 전환**: dlopen 위임 스텁 → 실제 라이브러리 정적 링크
+
+사용자 제안("안드로이드 앱처럼 필요한 라이브러리 다 앱 안에 넣으면?")과 ChatGPT 교차검증을 거쳐,
+Tizen 시스템 라이브러리 경로를 추측하는 dlopen 위임 방식 대신, 순수 라이브러리(하드웨어 접근 없는것)는
+실제 바이너리를 크로스컴파일하여 정적으로 번들링하는 하이브리드 방식으로 전환:
+
+| 라이브러리 | 최종 방식 |
+|---|---|
+| OpenSSL 3.0.13, curl 8.10.1, libxml2 2.12.9, glib/gobject 2.82.2, FreeType 2.13.3, fontconfig 2.15.0 | **정적 번들 (whole-archive)** |
+| GStreamer (core+plugins), D-Bus | 시스템 위임 유지 (HW 코덱은 시스템 plugin registry 필수) |
+| libEGL, libGLESv2, libwayland-egl | 시스템 필수 (GPU/컴포지터 벤더 종속) |
+| libwayland-client | 시스템 우선 + stub 폴백 |
+| libsecret | 자체 구현 (파일 기반, 변경 없음) |
+
+**빌드 인프라** (`scripts/build_thirdparty.sh`, `thirdparty/` — gitignored, 재현 가능):
+- `thirdparty/env.sh`: aarch64 크로스컴파일 공통 환경 (CC/AR/RANLIB/PKG_CONFIG_PATH)
+- `thirdparty/cross-aarch64.ini`: glib Meson 크로스파일
+- zlib, OpenSSL, libffi, pcre2, expat: Ubuntu deb-src (CVE 패치 이미 적용됨)
+- curl, libxml2, glib, freetype, fontconfig: 업스트림 직접 다운로드
+- GitHub 다운로드 차단됨 (세션 리포지토리 접근 제한) → sourceware.org 등 대체 미러 사용
+
+**핵심 기술 이슈 및 해결**:
+
+1. **커스텀 스텁 → 정적 번들 전환 패턴**:
+   각 `stub/lib*.c` 파일을 dlopen 기반 위임 코드에서 5줄짜리 constructor(로그만 출력)로 축소하고,
+   `stub/CMakeLists.txt`에서 `target_link_options(... "-Wl,--whole-archive" real.a "-Wl,--no-whole-archive")`로
+   실제 정적 라이브러리를 shared object에 통째로 링크. 각 스텁 .so는 서로 독립적(예: curl-stub과
+   crypto3-compat이 각자 OpenSSL 사본을 중복 보유) — 로드 순서 의존성 완전 제거.
+
+2. **CRITICAL: glibc ISO-C23 strtol 버전 함정**:
+   Ubuntu 24.04 aarch64 sysroot(glibc 2.39)에서 `_GNU_SOURCE`(OpenSSL/curl/glib 필수)를 정의하면
+   `<stdlib.h>`가 `strtol/scanf` 등을 `__isoc23_*` 심볼로 자동 리다이렉트하는데, 이 심볼들은
+   **glibc 2.38 이상에서만 존재**. Tizen 9.0의 실제 glibc 버전을 알 수 없는 상황에서 불필요한
+   높은 버전 요구사항이 생기는 것을 발견. `objcopy --redefine-sym __isoc23_strtol=strtol` 등으로
+   빌드 후 심볼명을 원래 이름(GLIBC_2.17~2.25대)으로 되돌리는 `degrade_isoc23_symbols()` 헬퍼를
+   모든 라이브러리 빌드에 적용 → 최종 GLIBC 요구사항 **2.38 → 2.34**로 하향 (pthread/libc 통합
+   시점, 2021년, 사실상 모든 최신 Linux에서 보장).
+
+3. **libcurl / expat 심볼 가시성(visibility) 은닉 문제**:
+   curl의 정적 빌드는 기본적으로 `-fvisibility=hidden`을 적용해 `curl_easy_*` 심볼이 whole-archive
+   링크 후에도 동적 심볼 테이블에 노출되지 않음 → `--disable-symbol-hiding` configure 옵션으로 해결.
+   expat은 Ubuntu deb-src에 `./configure`가 없고, CMake 빌드도 `XML_STATIC` 매크로가 정의되면
+   `XMLIMPORT` 가시성 속성 자체가 비활성화되는 구조라 CFLAGS 오버라이드가 셸 이스케이핑 문제로
+   실패 → CMake는 `expat_config.h` 생성용으로만 사용하고, 3개 소스 파일을 강제
+   `-DXMLIMPORT=__attribute__((visibility("default")))` 헤더와 함께 직접 컴파일.
+
+4. **expat arc4random_buf → GLIBC_2.36 함정**:
+   Ubuntu 24.04 헤더에서 `HAVE_ARC4RANDOM_BUF`가 자동 감지되어 해시 시드 무작위화에 사용되는데,
+   `arc4random_buf`는 glibc 2.36(2022)부터 존재. `expat_config.h`에서 강제 비활성화하여
+   `getrandom()`(glibc 2.25) 폴백을 사용하도록 패치 → GLIBC 요구사항 2.36 → 2.33으로 하향.
+
+5. **libffi 소스 패키지 문제**: Ubuntu deb-src의 `configure.ac`가 `LT_SYS_SYMBOL_USCORE` 매크로를
+   참조하는데 시스템 libtool 2.4.7에 해당 매크로가 없어 `autoreconf` 실패 → sourceware.org의
+   업스트림 libffi 3.4.3(사전 생성된 `./configure` 포함) 사용으로 우회.
+
+6. **pkg-config 경로 오염**: 초기에 `build/thirdparty/`에 워크스페이스를 만들었다가 `thirdparty/`로
+   이동했는데, 이동 전에 빌드된 zlib/OpenSSL의 `.pc` 파일에 구 경로가 하드코딩되어 있던 것을 발견,
+   `sed`로 일괄 수정. 이후 워크스페이스는 CMake `build/` 디렉토리 외부(`thirdparty/`)에 고정하여
+   `cmake --build build --clean-first`로 인한 실수 삭제 방지.
+
+**최종 검증 결과** (모든 7개 번들 라이브러리):
+```
+libcrypto.so.3      → GLIBC_2.34, 실제 OpenSSL 심볼 36개 확인
+libcurl.so.4        → GLIBC_2.34, curl_easy_* 등 확인
+libxml2.so.16       → GLIBC_2.34, xmlParseFile 등 확인
+libglib-2.0.so.0    → GLIBC_2.34, g_clear_error 등 확인
+libgobject-2.0.so.0 → GLIBC_2.34, g_object_set 등 확인
+libfreetype.so.6    → GLIBC_2.33, FT_Init_FreeType 등 확인
+libfontconfig.so.1  → GLIBC_2.33, FcConfigSubstitute 등 확인
+```
+- 모든 라이브러리 NEEDED: `libc.so.6`, `ld-linux-aarch64.so.1`만 (dlopen 완전 제거)
+- `dist/lib/` 총 크기: 19MB (17개 타겟, 경고 0건)
+- `scripts/diagnose.sh`: glibc 버전 체크 추가 (2.34 미만 시 FAIL), 번들/스텁 라이브러리 구분 표시
+
 ---
 
 ## 남은 작업
 
 ### 단기 (TV 배포 전)
 - [ ] Sober Flatpak에서 바이너리 추출: `bash scripts/extract_sober.sh <flatpak>`
+- [ ] **서드파티 라이브러리 크로스컴파일** (최초 1회, ~10분): `bash scripts/build_thirdparty.sh`
 - [ ] 빌드: `bash scripts/build.sh`
 - [ ] TV 배포: `bash scripts/deploy.sh <TV_IP>`
-- [ ] **진단 실행**: `ssh root@<TV_IP> bash /opt/tizenroblox/scripts/diagnose.sh`
+- [ ] **진단 실행**: `ssh root@<TV_IP> bash /opt/tizenroblox/scripts/diagnose.sh` (glibc 버전 체크 포함)
 - [ ] 자격증명 설정: `bash scripts/setup.sh` (진단 후 경고 있을 경우)
 - [ ] TV에서 실행: `ssh root@<TV_IP> /opt/tizenroblox/bin/launch.sh`
 

@@ -53,6 +53,27 @@ else
     fail "Architecture: ${ARCH} (expected aarch64)"
 fi
 
+# ── glibc version ──────────────────────────────────────────────────────────
+# Our bundled OpenSSL/curl/libxml2/glib/freetype/fontconfig were cross-compiled
+# on Ubuntu 24.04 (glibc 2.39 headers) and require glibc >= 2.34 at runtime
+# (the pthread/libc merge baseline — 2021+). Below that, these .so files
+# will fail to load with "version GLIBC_2.34 not found" errors.
+echo ""
+echo "--- glibc Version ---"
+GLIBC_VER=$(ldd --version 2>/dev/null | head -1 | grep -oP '[0-9]+\.[0-9]+$')
+if [ -n "${GLIBC_VER}" ]; then
+    GLIBC_MAJOR=$(echo "${GLIBC_VER}" | cut -d. -f1)
+    GLIBC_MINOR=$(echo "${GLIBC_VER}" | cut -d. -f2)
+    if [ "${GLIBC_MAJOR}" -gt 2 ] || { [ "${GLIBC_MAJOR}" -eq 2 ] && [ "${GLIBC_MINOR}" -ge 34 ]; }; then
+        ok "glibc ${GLIBC_VER} (>= 2.34 required by bundled libs)"
+    else
+        fail "glibc ${GLIBC_VER} is older than 2.34 — bundled OpenSSL/curl/glib/etc. will fail to load"
+        echo "     Rebuild thirdparty libs with an older glibc baseline, or use a Tizen build with newer glibc"
+    fi
+else
+    warn "Could not determine glibc version (ldd --version parse failed)"
+fi
+
 # ── Kernel version ────────────────────────────────────────────────────────────
 echo ""
 echo "--- Kernel ---"
@@ -191,22 +212,39 @@ else
     warn "libpulse.so.0 not found — no PulseAudio (ALSA fallback if available)"
 fi
 
-# ── Required stub/shim libraries ─────────────────────────────────────────────
+# ── Bundled libraries (real implementations, statically self-contained) ──────
+# These are NOT delegating stubs — each .so IS the real OpenSSL/curl/libxml2/
+# glib/freetype/fontconfig, statically linked via scripts/build_thirdparty.sh.
+# No system version is used or needed; only libc/libm/libdl/pthread deps.
 echo ""
-echo "--- TizenRoblox Stubs/Shims ---"
+echo "--- Bundled Libraries (self-contained, no system dependency) ---"
+BUNDLED_LIBS="
+libcrypto.so.3
+libcurl.so.4
+libxml2.so.16
+libglib-2.0.so.0
+libgobject-2.0.so.0
+libfreetype.so.6
+libfontconfig.so.1
+"
+for lib in ${BUNDLED_LIBS}; do
+    if [ -f "${INSTALL_DIR}/lib/${lib}" ] || [ -L "${INSTALL_DIR}/lib/${lib}" ]; then
+        ok "Bundled: ${lib}"
+    else
+        fail "Missing bundled lib: ${INSTALL_DIR}/lib/${lib}"
+        echo "     Run: bash scripts/build_thirdparty.sh && bash scripts/build.sh"
+    fi
+done
+
+# ── Delegating stubs (forward to system libs, or safe no-op fallback) ────────
+echo ""
+echo "--- Delegating Stubs/Shims ---"
 STUB_LIBS="
 libsecret-1.so.0
 libdecor-0.so.0
-libxml2.so.16
-libcrypto.so.3
 libgstreamer-1.0.so.0
 libgstapp-1.0.so.0
 libgstvideo-1.0.so.0
-libglib-2.0.so.0
-libgobject-2.0.so.0
-libfontconfig.so.1
-libfreetype.so.6
-libcurl.so.4
 libdbus-1.so.3
 "
 for lib in ${STUB_LIBS}; do
