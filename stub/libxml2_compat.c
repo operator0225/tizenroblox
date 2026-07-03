@@ -42,13 +42,14 @@ static void      (*real_xmlFree)(void *mem)                            = NULL;
 
 __attribute__((constructor))
 static void xml2_compat_init(void) {
-    /* Try libxml2.so.2 first, then libxml2.so */
+    /* Absolute paths only — avoid loading ourselves via LD_LIBRARY_PATH.
+     * Our stub is named libxml2.so.16; "libxml2.so" would resolve to it. */
     static const char *candidates[] = {
-        "libxml2.so.2",
-        "libxml2.so",
         "/usr/lib/aarch64-linux-gnu/libxml2.so.2",
         "/usr/lib64/libxml2.so.2",
         "/usr/lib/libxml2.so.2",
+        "/lib/aarch64-linux-gnu/libxml2.so.2",
+        "/usr/lib/tizen/libxml2.so.2",
         NULL
     };
 
