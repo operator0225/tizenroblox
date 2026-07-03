@@ -78,8 +78,11 @@ target_link_libraries(gobject-stub PRIVATE ${GLIB_DEPS} pthread)
 add_stub(fontconfig-stub "fontconfig" 1 "1.0.0" libfontconfig_stub.c)
 
 # ── libfreetype.so.6 ─────────────────────────────────────────────────────────
-# FreeType shim for glyph rasterization
+# Real FreeType 2.13.3, statically bundled
 add_stub(freetype-stub "freetype" 6 "6.0.0" libfreetype_stub.c)
+target_link_options(freetype-stub PRIVATE
+    "-Wl,--whole-archive" "${THIRDPARTY_PREFIX}/lib/libfreetype.a" "-Wl,--no-whole-archive")
+target_link_libraries(freetype-stub PRIVATE "${THIRDPARTY_PREFIX}/lib/libz.a" pthread)
 
 # ── libcurl.so.4 ─────────────────────────────────────────────────────────────
 # Real curl 8.10.1, statically bundled against our OpenSSL+zlib

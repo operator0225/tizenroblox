@@ -240,5 +240,19 @@ if [ ! -f "${PREFIX}/lib/libglib-2.0.a" ]; then
     meson install -C builddir
 fi
 
-echo "[thirdparty] zlib + OpenSSL + curl + libxml2 + libffi + pcre2 + glib ready."
-echo "[thirdparty] Remaining: freetype, expat, fontconfig — see PROGRESS.md Phase 12."
+# ── freetype (static) ─────────────────────────────────────────────────────
+if [ ! -f "${PREFIX}/lib/libfreetype.a" ]; then
+    echo "[thirdparty] Building freetype..."
+    cd "${SRC_DIR}/freetype-2.13.3"
+    ./configure --host="${HOST}" --prefix="${PREFIX}" \
+        --disable-shared --enable-static \
+        --without-harfbuzz --without-png --without-bzip2 --without-brotli \
+        CC="${CC}" AR="${AR}" RANLIB="${RANLIB}" \
+        CFLAGS="-O2 -fPIC -fvisibility=default"
+    make -j"$(nproc)"
+    degrade_isoc23_symbols objs/.libs/libfreetype.a
+    make install
+fi
+
+echo "[thirdparty] zlib + OpenSSL + curl + libxml2 + libffi + pcre2 + glib + freetype ready."
+echo "[thirdparty] Remaining: expat, fontconfig — see PROGRESS.md Phase 12."
