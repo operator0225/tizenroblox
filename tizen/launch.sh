@@ -5,7 +5,14 @@
 
 set -e
 
-INSTALL_DIR="${TIZENROBLOX_DIR:-/opt/tizenroblox}"
+# Auto-detect install location: env override → Tizen .tpk sandbox → manual install
+if [ -n "${TIZENROBLOX_DIR}" ]; then
+    INSTALL_DIR="${TIZENROBLOX_DIR}"
+elif [ -d "/opt/usr/apps/org.tizenroblox.app" ]; then
+    INSTALL_DIR="/opt/usr/apps/org.tizenroblox.app"
+else
+    INSTALL_DIR="/opt/tizenroblox"
+fi
 SOBER_BIN="${INSTALL_DIR}/bin/sober"
 INPUT_MAPPER="${INSTALL_DIR}/bin/input_mapper"
 LIB_DIR="${INSTALL_DIR}/lib"

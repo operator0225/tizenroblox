@@ -44,8 +44,31 @@ cp "${DIST_DIR}/bin/input_mapper"  "${APP_DIR}/bin/" 2>/dev/null || true
 cp "${DIST_DIR}/bin/launch.sh"     "${APP_DIR}/bin/"
 chmod +x "${APP_DIR}/bin/"*
 
-# Copy libraries (preserve symlinks)
-cp -a "${DIST_DIR}/lib/"* "${APP_DIR}/lib/"
+# Sober bundled libs — must be beside the sober binary (RUNPATH: $ORIGIN)
+for f in libloader.so libbadcpu.so; do
+    [ -f "${DIST_DIR}/bin/${f}" ] && cp "${DIST_DIR}/bin/${f}" "${APP_DIR}/bin/" || true
+    [ -f "sober_bundle/libs/${f}" ] && cp "sober_bundle/libs/${f}" "${APP_DIR}/bin/" || true
+done
+
+# mimalloc lives in RUNPATH subprojects/mimalloc/
+mkdir -p "${APP_DIR}/bin/subprojects/mimalloc"
+MIMALLOC_SRC=""
+[ -f "${DIST_DIR}/bin/subprojects/mimalloc/libmimalloc.so.3" ] && \
+    MIMALLOC_SRC="${DIST_DIR}/bin/subprojects/mimalloc/libmimalloc.so.3"
+[ -z "${MIMALLOC_SRC}" ] && [ -f "sober_bundle/libs/libmimalloc.so.3" ] && \
+    MIMALLOC_SRC="sober_bundle/libs/libmimalloc.so.3"
+if [ -n "${MIMALLOC_SRC}" ]; then
+    cp "${MIMALLOC_SRC}" "${APP_DIR}/bin/subprojects/mimalloc/"
+    (cd "${APP_DIR}/bin/subprojects/mimalloc" && \
+        ln -sf libmimalloc.so.3 libmimalloc.so 2>/dev/null || true)
+fi
+
+# Copy stub/shim libraries (preserve symlinks)
+cp -a "${DIST_DIR}/lib/"*.so* "${APP_DIR}/lib/" 2>/dev/null || true
+
+# Diagnostic script
+mkdir -p "${APP_DIR}/scripts"
+cp scripts/diagnose.sh "${APP_DIR}/scripts/" 2>/dev/null || true
 
 # Copy manifest
 cp "tizen/pkg/tizen-manifest.xml"  "${APP_DIR}/"
