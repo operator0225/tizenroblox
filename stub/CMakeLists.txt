@@ -33,8 +33,12 @@ add_stub(decor-0 "decor-0" 0 "0.0.0" libdecor.c)
 target_link_libraries(decor-0 PRIVATE)   # no dl needed
 
 # ── libxml2.so.16 ────────────────────────────────────────────────────────────
-# GNOME Platform 50 uses libxml2 3.x (SONAME .16); Tizen has 2.x (.2)
+# Real libxml2 2.12.9, statically bundled (SONAME renamed to match sober's
+# expected GNOME Platform 50 libxml2 3.x .16 versioning; Tizen only has .2)
 add_stub(xml2-compat "xml2" 16 "16.0.0" libxml2_compat.c)
+target_link_options(xml2-compat PRIVATE
+    "-Wl,--whole-archive" "${THIRDPARTY_PREFIX}/lib/libxml2.a" "-Wl,--no-whole-archive")
+target_link_libraries(xml2-compat PRIVATE "${THIRDPARTY_PREFIX}/lib/libz.a" pthread)
 
 # ── libcrypto.so.3 ───────────────────────────────────────────────────────────
 # Real OpenSSL 3.0.13, statically bundled (see thirdparty/ + build_thirdparty.sh)

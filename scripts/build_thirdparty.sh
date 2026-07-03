@@ -170,5 +170,19 @@ if [ ! -f "${PREFIX}/lib/libcurl.a" ]; then
     make install
 fi
 
-echo "[thirdparty] zlib + OpenSSL + curl ready. Remaining libs: libxml2, libffi,"
-echo "[thirdparty] pcre2, glib, freetype, expat, fontconfig — see PROGRESS.md Phase 12."
+# ── libxml2 (static) ──────────────────────────────────────────────────────
+if [ ! -f "${PREFIX}/lib/libxml2.a" ]; then
+    echo "[thirdparty] Building libxml2..."
+    cd "${SRC_DIR}/libxml2-2.12.9"
+    ./configure --host="${HOST}" --prefix="${PREFIX}" \
+        --disable-shared --enable-static \
+        --without-python --without-lzma --with-zlib="${PREFIX}" \
+        CC="${CC}" AR="${AR}" RANLIB="${RANLIB}" \
+        CFLAGS="-O2 -fPIC -fvisibility=default"
+    make -j"$(nproc)"
+    degrade_isoc23_symbols .libs/libxml2.a
+    make install
+fi
+
+echo "[thirdparty] zlib + OpenSSL + curl + libxml2 ready. Remaining libs:"
+echo "[thirdparty] libffi, pcre2, glib, freetype, expat, fontconfig — see PROGRESS.md Phase 12."
