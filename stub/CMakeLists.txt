@@ -74,8 +74,13 @@ target_link_options(gobject-stub PRIVATE
 target_link_libraries(gobject-stub PRIVATE ${GLIB_DEPS} pthread)
 
 # ── libfontconfig.so.1 ───────────────────────────────────────────────────────
-# fontconfig shim for font discovery
+# Real fontconfig 2.15.0, statically bundled against our freetype + expat
 add_stub(fontconfig-stub "fontconfig" 1 "1.0.0" libfontconfig_stub.c)
+target_link_options(fontconfig-stub PRIVATE
+    "-Wl,--whole-archive" "${THIRDPARTY_PREFIX}/lib/libfontconfig.a" "-Wl,--no-whole-archive")
+target_link_libraries(fontconfig-stub PRIVATE
+    "${THIRDPARTY_PREFIX}/lib/libfreetype.a" "${THIRDPARTY_PREFIX}/lib/libexpat.a"
+    "${THIRDPARTY_PREFIX}/lib/libz.a" pthread)
 
 # ── libfreetype.so.6 ─────────────────────────────────────────────────────────
 # Real FreeType 2.13.3, statically bundled

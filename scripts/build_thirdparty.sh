@@ -92,6 +92,10 @@ if ! command -v meson >/dev/null 2>&1; then
     echo "[thirdparty] Installing meson..."
     apt-get install -y -qq meson
 fi
+if ! command -v gperf >/dev/null 2>&1; then
+    echo "[thirdparty] Installing gperf (fontconfig build dep)..."
+    apt-get install -y -qq gperf
+fi
 
 # ── Fetch sources ─────────────────────────────────────────────────────────
 # zlib, OpenSSL, libffi, pcre2, expat: via Ubuntu deb-src (CVE-patched)
@@ -254,5 +258,61 @@ if [ ! -f "${PREFIX}/lib/libfreetype.a" ]; then
     make install
 fi
 
-echo "[thirdparty] zlib + OpenSSL + curl + libxml2 + libffi + pcre2 + glib + freetype ready."
-echo "[thirdparty] Remaining: expat, fontconfig — see PROGRESS.md Phase 12."
+# ── expat (static, manual compile) ───────────────────────────────────────
+# Ubuntu's deb-src expat_2.6.1 ships without a pre-generated ./configure.
+# Its own CMake build forces -fvisibility=hidden with no working override
+# for static builds (XML_STATIC skips the XMLIMPORT default-visibility
+# attribute entirely — see expat_external.h). Rather than fight CMake's
+# flag/quoting, run the CMake configure step just to generate
+# expat_config.h, then compile the 3 source files directly with a forced
+# default-visibility override header.
+if [ ! -f "${PREFIX}/lib/libexpat.a" ]; then
+    echo "[thirdparty] Building expat..."
+    cd "${SRC_DIR}/expat-2.6.1/expat"
+    rm -rf build manual_build
+    cmake -B build \
+        -DCMAKE_TOOLCHAIN_FILE="$(pwd)/../../../../toolchain/aarch64-tizen.cmake" \
+        -DCMAKE_INSTALL_PREFIX="${PREFIX}" -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_SHARED_LIBS=OFF -DEXPAT_SHARED_LIBS=OFF \
+        -DEXPAT_BUILD_EXAMPLES=OFF -DEXPAT_BUILD_TESTS=OFF \
+        -DEXPAT_BUILD_TOOLS=OFF -DEXPAT_BUILD_DOCS=OFF -DEXPAT_BUILD_FUZZERS=OFF
+    # Force HAVE_ARC4RANDOM_BUF off: glibc only gained arc4random_buf in
+    # 2.36 (mid-2022); expat falls back to getrandom() (glibc >= 2.25)
+    # when it's absent, which keeps us under our GLIBC_2.34 floor.
+    sed -i 's/^#define HAVE_ARC4RANDOM_BUF/\/* undef: forced off *\//' build/expat_config.h
+    mkdir -p manual_build
+    cat > manual_build/force_visibility.h <<'HEOF'
+#ifndef XMLIMPORT
+#define XMLIMPORT __attribute__((visibility("default")))
+#endif
+HEOF
+    for f in xmlparse xmlrole xmltok; do
+        "${CC}" -O2 -fPIC -DHAVE_EXPAT_CONFIG_H \
+            -include manual_build/force_visibility.h \
+            -I build -I lib -c "lib/${f}.c" -o "manual_build/${f}.o"
+    done
+    "${AR}" rcs manual_build/libexpat.a manual_build/xmlparse.o manual_build/xmlrole.o manual_build/xmltok.o
+    degrade_isoc23_symbols manual_build/libexpat.a
+    cp manual_build/libexpat.a "${PREFIX}/lib/"
+    cp lib/expat.h lib/expat_external.h "${PREFIX}/include/"
+fi
+
+# ── fontconfig (static) ───────────────────────────────────────────────────
+if [ ! -f "${PREFIX}/lib/libfontconfig.a" ]; then
+    echo "[thirdparty] Building fontconfig..."
+    cd "${SRC_DIR}/fontconfig-2.15.0"
+    ./configure --host="${HOST}" --prefix="${PREFIX}" \
+        --disable-shared --enable-static --disable-docs --disable-nls \
+        --with-cache-dir=/opt/tizenroblox/data/.cache/fontconfig \
+        --with-default-fonts=/usr/share/fonts \
+        EXPAT_CFLAGS="-I${PREFIX}/include" \
+        EXPAT_LIBS="-L${PREFIX}/lib -lexpat" \
+        CC="${CC}" AR="${AR}" RANLIB="${RANLIB}" \
+        CFLAGS="-O2 -fPIC -fvisibility=default"
+    make -j"$(nproc)"
+    degrade_isoc23_symbols src/.libs/libfontconfig.a
+    make install
+fi
+
+echo "[thirdparty] All third-party libraries built: zlib, OpenSSL, curl,"
+echo "[thirdparty] libxml2, libffi, pcre2, glib, freetype, expat, fontconfig."
