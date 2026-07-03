@@ -1,18 +1,21 @@
-# Build artifacts
+# CMake build directory (pure intermediate — .o files, CMakeCache.txt with
+# absolute paths. Not portable; scripts/build.sh regenerates it in seconds.)
 build/
-dist/
 
-# Third-party library sources/build (cross-compiled OpenSSL, curl, glib, etc.)
-# Re-fetched and rebuilt by scripts/build_thirdparty.sh — not redistributable/too large for git
-thirdparty/
+# Third-party library SOURCE/build trees (tarballs + autotools/meson build
+# litter — hundreds of MB, fully re-fetched by scripts/build_thirdparty.sh).
+# The compiled result (thirdparty/install/) IS tracked — see below.
+thirdparty/src/
 
-# Extracted Sober Flatpak binaries (not redistributable)
-# Run scripts/extract_sober.sh to populate this directory from the .flatpak file
-sober_bundle/
+# Logs
+*.log
+logs/
 
-# Tizen package output
-*.tpk
-*.wgt
+# Editor
+.vscode/
+.idea/
+*.swp
+*~
 
 # Logs
 *.log

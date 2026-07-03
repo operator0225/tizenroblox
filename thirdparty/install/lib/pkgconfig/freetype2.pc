@@ -1,0 +1,14 @@
+prefix=/home/user/tizenroblox/thirdparty/install
+exec_prefix=/home/user/tizenroblox/thirdparty/install
+libdir=/home/user/tizenroblox/thirdparty/install/lib
+includedir=/home/user/tizenroblox/thirdparty/install/include
+
+Name: FreeType 2
+URL: https://freetype.org
+Description: A free, high-quality, and portable font engine.
+Version: 26.2.20
+Requires: zlib
+Requires.private: 
+Libs: -L/home/user/tizenroblox/thirdparty/install/lib -lfreetype 
+Libs.private: 
+Cflags: -I${includedir}/freetype2
