@@ -52,6 +52,8 @@ static void fc_stub_init(void) {
     fc_handle = dlopen("/usr/lib/aarch64-linux-gnu/libfontconfig.so.1", RTLD_NOW | RTLD_GLOBAL);
     if (!fc_handle) fc_handle = dlopen("/usr/lib64/libfontconfig.so.1", RTLD_NOW | RTLD_GLOBAL);
     if (!fc_handle) fc_handle = dlopen("/usr/lib/libfontconfig.so.1", RTLD_NOW | RTLD_GLOBAL);
+    if (!fc_handle) fc_handle = dlopen("/lib/aarch64-linux-gnu/libfontconfig.so.1", RTLD_NOW | RTLD_GLOBAL);
+    if (!fc_handle) fc_handle = dlopen("/usr/lib/tizen/libfontconfig.so.1", RTLD_NOW | RTLD_GLOBAL);
 
     if (fc_handle) {
         fprintf(stderr, "[fc-stub] System fontconfig loaded\n");

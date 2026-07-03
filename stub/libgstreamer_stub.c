@@ -95,16 +95,19 @@ static void (*r_gst_video_frame_unmap)(GstVideoFrame*) = NULL;
 
 __attribute__((constructor))
 static void gstreamer_stub_init(void) {
-    /* Try system GStreamer */
+    /* Try system GStreamer (absolute paths — avoid self-loading via LD_LIBRARY_PATH) */
     gst_core = dlopen("/usr/lib/aarch64-linux-gnu/libgstreamer-1.0.so.0", RTLD_NOW | RTLD_GLOBAL);
     if (!gst_core) gst_core = dlopen("/usr/lib64/libgstreamer-1.0.so.0", RTLD_NOW | RTLD_GLOBAL);
     if (!gst_core) gst_core = dlopen("/usr/lib/libgstreamer-1.0.so.0", RTLD_NOW | RTLD_GLOBAL);
+    if (!gst_core) gst_core = dlopen("/usr/lib/tizen/libgstreamer-1.0.so.0", RTLD_NOW | RTLD_GLOBAL);
     gst_app  = dlopen("/usr/lib/aarch64-linux-gnu/libgstapp-1.0.so.0", RTLD_NOW | RTLD_GLOBAL);
     if (!gst_app) gst_app = dlopen("/usr/lib64/libgstapp-1.0.so.0", RTLD_NOW | RTLD_GLOBAL);
     if (!gst_app) gst_app = dlopen("/usr/lib/libgstapp-1.0.so.0", RTLD_NOW | RTLD_GLOBAL);
+    if (!gst_app) gst_app = dlopen("/usr/lib/tizen/libgstapp-1.0.so.0", RTLD_NOW | RTLD_GLOBAL);
     gst_vid  = dlopen("/usr/lib/aarch64-linux-gnu/libgstvideo-1.0.so.0", RTLD_NOW | RTLD_GLOBAL);
     if (!gst_vid) gst_vid = dlopen("/usr/lib64/libgstvideo-1.0.so.0", RTLD_NOW | RTLD_GLOBAL);
     if (!gst_vid) gst_vid = dlopen("/usr/lib/libgstvideo-1.0.so.0", RTLD_NOW | RTLD_GLOBAL);
+    if (!gst_vid) gst_vid = dlopen("/usr/lib/tizen/libgstvideo-1.0.so.0", RTLD_NOW | RTLD_GLOBAL);
 
     if (gst_core) {
         fprintf(stderr, "[gst-stub] System GStreamer loaded\n");

@@ -58,6 +58,8 @@ static void ft_stub_init(void) {
     ft_handle = dlopen("/usr/lib/aarch64-linux-gnu/libfreetype.so.6", RTLD_NOW | RTLD_GLOBAL);
     if (!ft_handle) ft_handle = dlopen("/usr/lib64/libfreetype.so.6", RTLD_NOW | RTLD_GLOBAL);
     if (!ft_handle) ft_handle = dlopen("/usr/lib/libfreetype.so.6", RTLD_NOW | RTLD_GLOBAL);
+    if (!ft_handle) ft_handle = dlopen("/lib/aarch64-linux-gnu/libfreetype.so.6", RTLD_NOW | RTLD_GLOBAL);
+    if (!ft_handle) ft_handle = dlopen("/usr/lib/tizen/libfreetype.so.6", RTLD_NOW | RTLD_GLOBAL);
 
     if (ft_handle) {
         fprintf(stderr, "[ft-stub] System FreeType loaded\n");
