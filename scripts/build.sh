@@ -44,10 +44,8 @@ cp -f "${BUILD_DIR}/dist/bin/launch.sh"        "${DIST_DIR}/bin/" 2>/dev/null ||
     cp -f tizen/launch.sh                       "${DIST_DIR}/bin/"
 chmod +x "${DIST_DIR}/bin/launch.sh"
 
-# Copy stub shared libraries (SONAME-versioned)
-for lib in "${BUILD_DIR}/dist/lib"/*.so*; do
-    [ -f "$lib" ] && cp -f "$lib" "${DIST_DIR}/lib/"
-done
+# Copy stub shared libraries (SONAME-versioned, preserve symlinks)
+cp -a "${BUILD_DIR}/dist/lib/"*.so* "${DIST_DIR}/lib/" 2>/dev/null || true
 
 # Sober runtime binaries (real Flatpak binaries)
 cp -f sober_bundle/bin/sober              "${DIST_DIR}/bin/"

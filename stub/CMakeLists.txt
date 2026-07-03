@@ -1,38 +1,64 @@
 cmake_minimum_required(VERSION 3.16)
 
-# libsecret stub (replaces GNOME keyring with file-based storage)
-add_library(secret-1 SHARED libsecret.c)
-set_target_properties(secret-1 PROPERTIES
-    OUTPUT_NAME "secret-1"
-    SOVERSION 0
-    VERSION 0.0.0
-    PREFIX "lib"
-)
-target_compile_options(secret-1 PRIVATE -fvisibility=default -Wall -Wextra)
+# ── Helper macro ──────────────────────────────────────────────────────────────
+# add_stub(TARGET OUTPUT_NAME SOVERSION VERSION SOURCES...)
+macro(add_stub target outname soversion version)
+    add_library(${target} SHARED ${ARGN})
+    set_target_properties(${target} PROPERTIES
+        OUTPUT_NAME  "${outname}"
+        SOVERSION    ${soversion}
+        VERSION      ${version}
+        PREFIX       "lib"
+    )
+    target_compile_options(${target} PRIVATE -fvisibility=default -Wall -Wextra)
+    target_link_libraries(${target} PRIVATE dl)
+endmacro()
 
-# libdecor stub (always-fullscreen no-op for Tizen TV)
-add_library(decor-0 SHARED libdecor.c)
-set_target_properties(decor-0 PROPERTIES
-    OUTPUT_NAME "decor-0"
-    SOVERSION 0
-    VERSION 0.0.0
-    PREFIX "lib"
-)
-target_compile_options(decor-0 PRIVATE -fvisibility=default -Wall -Wextra)
+# ── libsecret-1.so.0 ─────────────────────────────────────────────────────────
+# Replaces GNOME keyring with file-based credential storage
+add_stub(secret-1 "secret-1" 0 "0.0.0" libsecret.c)
+target_link_libraries(secret-1 PRIVATE)  # no dl needed for this one
 
-# libxml2.so.16 compatibility shim
-# Sober requires libxml2 3.x SONAME (libxml2.so.16); Tizen has libxml2 2.x
-# This shim dynamically loads the system libxml2.so.2 and re-exports symbols
-add_library(xml2-compat SHARED libxml2_compat.c)
-set_target_properties(xml2-compat PROPERTIES
-    OUTPUT_NAME "xml2"
-    SOVERSION 16
-    VERSION 16.0.0
-    PREFIX "lib"
-)
-target_compile_options(xml2-compat PRIVATE -fvisibility=default -Wall -Wextra)
-target_link_libraries(xml2-compat PRIVATE dl)
+# ── libdecor-0.so.0 ──────────────────────────────────────────────────────────
+# Always-fullscreen Wayland decoration no-op for Tizen TV
+add_stub(decor-0 "decor-0" 0 "0.0.0" libdecor.c)
+target_link_libraries(decor-0 PRIVATE)   # no dl needed
 
-install(TARGETS secret-1 decor-0 xml2-compat
+# ── libxml2.so.16 ────────────────────────────────────────────────────────────
+# GNOME Platform 50 uses libxml2 3.x (SONAME .16); Tizen has 2.x (.2)
+add_stub(xml2-compat "xml2" 16 "16.0.0" libxml2_compat.c)
+
+# ── libcrypto.so.3 ───────────────────────────────────────────────────────────
+# OpenSSL 3.x shim — forwards to system libcrypto.so.3 or libcrypto.so.1.1
+add_stub(crypto3-compat "crypto" 3 "3.0.0" libcrypto3_compat.c)
+
+# ── libgstreamer-1.0.so.0 + libgstapp + libgstvideo ─────────────────────────
+# GStreamer shim for Roblox video playback (covers all three libs in one .so)
+add_stub(gstreamer-stub "gstreamer-1.0" 0 "0.0.0" libgstreamer_stub.c)
+add_stub(gstapp-stub    "gstapp-1.0"    0 "0.0.0" libgstreamer_stub.c)
+add_stub(gstvideo-stub  "gstvideo-1.0"  0 "0.0.0" libgstreamer_stub.c)
+
+# ── libglib-2.0.so.0 + libgobject-2.0.so.0 ───────────────────────────────────
+# GLib/GObject shim — only 4 symbols used by sober
+add_stub(glib-stub    "glib-2.0"    0 "0.0.0" libglib_stub.c)
+add_stub(gobject-stub "gobject-2.0" 0 "0.0.0" libglib_stub.c)
+
+# ── libfontconfig.so.1 ───────────────────────────────────────────────────────
+# fontconfig shim for font discovery
+add_stub(fontconfig-stub "fontconfig" 1 "1.0.0" libfontconfig_stub.c)
+
+# ── libfreetype.so.6 ─────────────────────────────────────────────────────────
+# FreeType shim for glyph rasterization
+add_stub(freetype-stub "freetype" 6 "6.0.0" libfreetype_stub.c)
+
+# ── libcurl.so.4 ─────────────────────────────────────────────────────────────
+# libcurl shim for HTTP (Roblox API / asset downloads)
+add_stub(curl-stub "curl" 4 "4.0.0" libcurl_stub.c)
+
+install(TARGETS
+    secret-1 decor-0 xml2-compat crypto3-compat
+    gstreamer-stub gstapp-stub gstvideo-stub
+    glib-stub gobject-stub
+    fontconfig-stub freetype-stub curl-stub
     LIBRARY DESTINATION ${CMAKE_BINARY_DIR}/dist/lib
 )
