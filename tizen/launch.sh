@@ -20,8 +20,12 @@ LOG_FILE="${INSTALL_DIR}/logs/tizenroblox.log"
 PID_FILE="/tmp/tizenroblox.pid"
 INPUT_PID_FILE="/tmp/tizenroblox_input.pid"
 
-# ── Logging ──────────────────────────────────────────────────────────────────
+# ── Logging (with rotation) ───────────────────────────────────────────────────
 mkdir -p "${INSTALL_DIR}/logs"
+# Rotate log if > 10 MB to prevent filling up Tizen storage
+if [ -f "${LOG_FILE}" ] && [ "$(stat -c%s "${LOG_FILE}" 2>/dev/null || echo 0)" -gt 10485760 ]; then
+    mv -f "${LOG_FILE}" "${LOG_FILE}.old" 2>/dev/null || true
+fi
 exec >> "${LOG_FILE}" 2>&1
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] TizenRoblox starting..."
 

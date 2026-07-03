@@ -146,12 +146,22 @@ static int  (*r_cfg_get_state)(libdecor_configuration_t*, libdecor_window_state*
 __attribute__((constructor))
 static void libdecor_stub_init(void)
 {
+    /* Allow forcing the fallback stub for Wayland compositors that don't
+     * support xdg_shell (e.g. older Tizen Enlightenment builds). */
+    if (getenv("TIZENROBLOX_FORCE_LIBDECOR_STUB")) {
+        fprintf(stderr, "[libdecor-stub] TIZENROBLOX_FORCE_LIBDECOR_STUB set, "
+                        "using built-in fullscreen fallback\n");
+        return;
+    }
+
     /* Try common Tizen / Linux system paths for the real libdecor */
     static const char * const paths[] = {
         "/usr/lib/aarch64-linux-gnu/libdecor-0.so.0",
         "/usr/lib64/libdecor-0.so.0",
         "/usr/lib/libdecor-0.so.0",
         "/lib/aarch64-linux-gnu/libdecor-0.so.0",
+        "/usr/lib/tizen/libdecor-0.so.0",
+        "/usr/share/tizen/libdecor-0.so.0",
         NULL
     };
 
