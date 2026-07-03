@@ -100,14 +100,18 @@ static int            (*r_i2d_X509)(X509*, unsigned char**)                  = N
 
 __attribute__((constructor))
 static void crypto3_compat_init(void) {
+    /* Use ABSOLUTE paths only — SONAME dlopen("libcrypto.so.3", ...) would
+     * find ourselves in LD_LIBRARY_PATH and cause a circular load. */
     static const char *candidates[] = {
-        "libcrypto.so.3",
-        "libcrypto.so",
         "/usr/lib/aarch64-linux-gnu/libcrypto.so.3",
         "/usr/lib64/libcrypto.so.3",
-        "libcrypto.so.1.1",
+        "/usr/lib/libcrypto.so.3",
+        "/lib/aarch64-linux-gnu/libcrypto.so.3",
+        /* Fallback to OpenSSL 1.1 (compatible ABI for our symbols) */
         "/usr/lib/aarch64-linux-gnu/libcrypto.so.1.1",
         "/usr/lib64/libcrypto.so.1.1",
+        "/usr/lib/libcrypto.so.1.1",
+        "/lib/aarch64-linux-gnu/libcrypto.so.1.1",
         NULL
     };
 

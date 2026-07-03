@@ -41,6 +41,28 @@ static void        (*r_curl_slist_free_all)(curl_slist*) = NULL;
 
 __attribute__((constructor))
 static void curl_stub_init(void) {
+    /* Preload libssl into the global namespace BEFORE loading libcurl.
+     * System libcurl depends on libssl.so.3; if it's in a non-standard path,
+     * dlopen(libcurl) would fail without this step. */
+    static const char * const ssl_paths[] = {
+        "/usr/lib/aarch64-linux-gnu/libssl.so.3",
+        "/usr/lib64/libssl.so.3",
+        "/usr/lib/libssl.so.3",
+        "/lib/aarch64-linux-gnu/libssl.so.3",
+        /* Tizen may use libssl.so.1.1 if compiled with OpenSSL 1.1 */
+        "/usr/lib/aarch64-linux-gnu/libssl.so.1.1",
+        "/usr/lib64/libssl.so.1.1",
+        "/usr/lib/libssl.so.1.1",
+        NULL
+    };
+    for (int i = 0; ssl_paths[i]; i++) {
+        void *h = dlopen(ssl_paths[i], RTLD_NOW | RTLD_GLOBAL);
+        if (h) {
+            fprintf(stderr, "[curl-stub] Preloaded SSL: %s\n", ssl_paths[i]);
+            break;
+        }
+    }
+
     curl_handle = dlopen("/usr/lib/aarch64-linux-gnu/libcurl.so.4", RTLD_NOW | RTLD_GLOBAL);
     if (!curl_handle) curl_handle = dlopen("/usr/lib64/libcurl.so.4", RTLD_NOW | RTLD_GLOBAL);
     if (!curl_handle) curl_handle = dlopen("/usr/lib/libcurl.so.4", RTLD_NOW | RTLD_GLOBAL);
