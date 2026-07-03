@@ -64,20 +64,17 @@ fi
 # ── Wayland environment ───────────────────────────────────────────────────────
 # Tizen Enlightenment Wayland compositor
 if [ -z "${WAYLAND_DISPLAY}" ]; then
-    # Tizen 9: /run/display/wayland-0 or /tmp/.RTE/wayland-0
+    # Search common Tizen 9 Enlightenment compositor socket locations
     for socket in "wayland-0" "wayland-1"; do
-        if [ -S "/run/display/${socket}" ]; then
-            export WAYLAND_DISPLAY="${socket}"
-            export XDG_RUNTIME_DIR="/run/display"
-            break
-        elif [ -S "/tmp/.RTE/${socket}" ]; then
-            export WAYLAND_DISPLAY="${socket}"
-            export XDG_RUNTIME_DIR="/tmp/.RTE"
-            break
-        elif [ -S "${XDG_RUNTIME_DIR:-/run/user/5000}/${socket}" ]; then
-            export WAYLAND_DISPLAY="${socket}"
-            break
-        fi
+        for dir in "/run/display" "/tmp/.RTE" "/run/enlightenment" \
+                   "/run/user/5000" "/run/user/0" \
+                   "${XDG_RUNTIME_DIR:-/run/user/5000}"; do
+            if [ -S "${dir}/${socket}" ]; then
+                export WAYLAND_DISPLAY="${socket}"
+                export XDG_RUNTIME_DIR="${dir}"
+                break 2
+            fi
+        done
     done
 fi
 
@@ -151,19 +148,24 @@ prefer_system_lib libwayland-client.so.0 \
     /usr/lib64/libwayland-client.so.0 \
     /usr/lib/libwayland-client.so.0 \
     /lib/aarch64-linux-gnu/libwayland-client.so.0 \
-    /lib64/libwayland-client.so.0
+    /lib64/libwayland-client.so.0 \
+    /usr/lib/tizen/libwayland-client.so.0 \
+    /opt/tizen/usr/lib/libwayland-client.so.0
 
 prefer_system_lib libwayland-egl.so.1 \
     /usr/lib/aarch64-linux-gnu/libwayland-egl.so.1 \
     /usr/lib64/libwayland-egl.so.1 \
     /usr/lib/libwayland-egl.so.1 \
     /lib/aarch64-linux-gnu/libwayland-egl.so.1 \
-    /usr/lib/aarch64-linux-gnu/mesa-egl/libwayland-egl.so.1
+    /usr/lib/aarch64-linux-gnu/mesa-egl/libwayland-egl.so.1 \
+    /usr/lib/tizen/libwayland-egl.so.1 \
+    /opt/tizen/usr/lib/libwayland-egl.so.1
 
 prefer_system_lib libwayland-cursor.so.0 \
     /usr/lib/aarch64-linux-gnu/libwayland-cursor.so.0 \
     /usr/lib64/libwayland-cursor.so.0 \
-    /usr/lib/libwayland-cursor.so.0
+    /usr/lib/libwayland-cursor.so.0 \
+    /usr/lib/tizen/libwayland-cursor.so.0
 
 try_symlink_lib libxkbcommon.so.0 \
     /usr/lib/aarch64-linux-gnu/libxkbcommon.so.0 \
@@ -243,13 +245,17 @@ prefer_system_lib libEGL.so.1 \
     /usr/lib64/libEGL.so.1 \
     /usr/lib/libEGL.so.1 \
     /usr/lib/aarch64-linux-gnu/mesa-egl/libEGL.so.1 \
-    /usr/lib/tizen/libEGL.so.1
+    /usr/lib/tizen/libEGL.so.1 \
+    /opt/tizen/usr/lib/libEGL.so.1 \
+    /usr/lib/aarch64-linux-gnu/libEGL_mesa.so.0 \
+    /usr/lib/libEGL_nvidia.so.0
 
 prefer_system_lib libGLESv2.so.2 \
     /usr/lib/aarch64-linux-gnu/libGLESv2.so.2 \
     /usr/lib64/libGLESv2.so.2 \
     /usr/lib/libGLESv2.so.2 \
-    /usr/lib/tizen/libGLESv2.so.2
+    /usr/lib/tizen/libGLESv2.so.2 \
+    /opt/tizen/usr/lib/libGLESv2.so.2
 
 # ── GPU / EGL environment ─────────────────────────────────────────────────────
 export EGL_PLATFORM="wayland"
@@ -300,6 +306,21 @@ export SOBER_DATA_DIR="${SOBER_HOME}/.local/share/sober"
 if [ -z "${DBUS_SESSION_BUS_ADDRESS}" ]; then
     if command -v dbus-launch >/dev/null 2>&1; then
         eval $(dbus-launch --sh-syntax 2>/dev/null) || true
+    fi
+fi
+
+# ── uinput kernel module ──────────────────────────────────────────────────────
+# input_mapper requires /dev/uinput for virtual gamepad creation.
+# Load the kernel module if the device node is missing.
+if [ ! -c /dev/uinput ]; then
+    modprobe uinput 2>/dev/null || true
+    sleep 0.3
+    if [ ! -c /dev/uinput ]; then
+        echo "[launch] WARNING: /dev/uinput not available — virtual gamepad disabled"
+        echo "[launch]   Try: modprobe uinput (or enable CONFIG_INPUT_UINPUT in kernel)"
+    else
+        echo "[launch] uinput module loaded"
+        chmod 0660 /dev/uinput 2>/dev/null || true
     fi
 fi
 

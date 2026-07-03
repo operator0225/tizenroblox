@@ -23,11 +23,12 @@ fail() { echo -e "${RED}[FAIL]${NC} $*";   FAIL=$((FAIL+1)); }
 
 find_lib() {
     local SONAME="$1"
-    # Check our install dir first, then system
+    # Check our install dir first, then system (including Tizen-specific paths)
     for dir in "${INSTALL_DIR}/lib" \
                /usr/lib/aarch64-linux-gnu \
                /usr/lib64 /usr/lib \
-               /lib/aarch64-linux-gnu /lib; do
+               /lib/aarch64-linux-gnu /lib \
+               /usr/lib/tizen /opt/tizen/usr/lib; do
         if [ -f "${dir}/${SONAME}" ] || [ -L "${dir}/${SONAME}" ]; then
             echo "${dir}/${SONAME}"
             return 0
@@ -117,7 +118,8 @@ echo ""
 echo "--- Wayland Display ---"
 WAYLAND_FOUND=0
 for socket in "wayland-0" "wayland-1"; do
-    for dir in "/run/display" "/tmp/.RTE" "/run/user/5000"; do
+    for dir in "/run/display" "/tmp/.RTE" "/run/enlightenment" \
+               "/run/user/5000" "/run/user/0"; do
         if [ -S "${dir}/${socket}" ]; then
             ok "Wayland socket: ${dir}/${socket}"
             WAYLAND_FOUND=1
@@ -125,7 +127,7 @@ for socket in "wayland-0" "wayland-1"; do
         fi
     done
 done
-[ "${WAYLAND_FOUND}" -eq 0 ] && fail "No Wayland socket found (tried /run/display, /tmp/.RTE, /run/user/5000)"
+[ "${WAYLAND_FOUND}" -eq 0 ] && fail "No Wayland socket found (tried /run/display, /tmp/.RTE, /run/enlightenment, /run/user/5000)"
 
 for lib in libwayland-client.so.0 libwayland-egl.so.1 libwayland-cursor.so.0; do
     path=$(find_lib "${lib}")
