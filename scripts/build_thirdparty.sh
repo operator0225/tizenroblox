@@ -219,5 +219,26 @@ if [ ! -f "${PREFIX}/lib/libpcre2-8.a" ]; then
     make install
 fi
 
-echo "[thirdparty] zlib + OpenSSL + curl + libxml2 + libffi + pcre2 ready."
-echo "[thirdparty] Remaining: glib, freetype, expat, fontconfig — see PROGRESS.md Phase 12."
+# ── glib / gobject / gio (static, via Meson) ─────────────────────────────
+if [ ! -f "${PREFIX}/lib/libglib-2.0.a" ]; then
+    echo "[thirdparty] Building glib..."
+    cd "${SRC_DIR}/glib-2.82.2"
+    rm -rf builddir
+    meson setup builddir \
+        --cross-file "${THIRDPARTY_DIR}/cross-aarch64.ini" \
+        --prefix="${PREFIX}" --default-library=static --buildtype=release \
+        -Dtests=false -Dinstalled_tests=false -Dintrospection=disabled \
+        -Dlibmount=disabled -Dselinux=disabled -Dxattr=false \
+        -Ddtrace=disabled -Dsystemtap=disabled -Dnls=disabled -Dman=false \
+        -Ddocumentation=false -Dsysprof=disabled -Dlibelf=disabled \
+        -Dbsymbolic_functions=false
+    ninja -C builddir -j"$(nproc)"
+    for lib in glib/libglib-2.0.a gobject/libgobject-2.0.a \
+               gio/libgio-2.0.a gmodule/libgmodule-2.0.a; do
+        degrade_isoc23_symbols "builddir/${lib}"
+    done
+    meson install -C builddir
+fi
+
+echo "[thirdparty] zlib + OpenSSL + curl + libxml2 + libffi + pcre2 + glib ready."
+echo "[thirdparty] Remaining: freetype, expat, fontconfig — see PROGRESS.md Phase 12."

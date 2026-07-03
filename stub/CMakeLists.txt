@@ -54,9 +54,24 @@ add_stub(gstapp-stub    "gstapp-1.0"    0 "0.0.0" libgstreamer_stub.c)
 add_stub(gstvideo-stub  "gstvideo-1.0"  0 "0.0.0" libgstreamer_stub.c)
 
 # ── libglib-2.0.so.0 + libgobject-2.0.so.0 ───────────────────────────────────
-# GLib/GObject shim — only 4 symbols used by sober
+# Real GLib 2.82.2, statically bundled (sober only calls 4 symbols, but we
+# ship the real thing rather than hand-reimplementing a subset)
+set(GLIB_DEPS
+    "${THIRDPARTY_PREFIX}/lib/libffi.a"
+    "${THIRDPARTY_PREFIX}/lib/libpcre2-8.a"
+    "${THIRDPARTY_PREFIX}/lib/libz.a")
+
 add_stub(glib-stub    "glib-2.0"    0 "0.0.0" libglib_stub.c)
+target_link_options(glib-stub PRIVATE
+    "-Wl,--whole-archive" "${THIRDPARTY_PREFIX}/lib/libglib-2.0.a" "-Wl,--no-whole-archive")
+target_link_libraries(glib-stub PRIVATE ${GLIB_DEPS} pthread)
+
 add_stub(gobject-stub "gobject-2.0" 0 "0.0.0" libglib_stub.c)
+target_link_options(gobject-stub PRIVATE
+    "-Wl,--whole-archive"
+    "${THIRDPARTY_PREFIX}/lib/libgobject-2.0.a" "${THIRDPARTY_PREFIX}/lib/libglib-2.0.a"
+    "-Wl,--no-whole-archive")
+target_link_libraries(gobject-stub PRIVATE ${GLIB_DEPS} pthread)
 
 # ── libfontconfig.so.1 ───────────────────────────────────────────────────────
 # fontconfig shim for font discovery
