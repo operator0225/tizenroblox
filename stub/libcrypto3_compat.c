@@ -112,6 +112,10 @@ static void crypto3_compat_init(void) {
         "/usr/lib64/libcrypto.so.1.1",
         "/usr/lib/libcrypto.so.1.1",
         "/lib/aarch64-linux-gnu/libcrypto.so.1.1",
+        /* Tizen vendor paths */
+        "/usr/lib/tizen/libcrypto.so.3",
+        "/usr/lib/tizen/libcrypto.so.1.1",
+        "/opt/tizen/usr/lib/libcrypto.so.3",
         NULL
     };
 
