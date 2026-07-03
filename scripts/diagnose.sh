@@ -71,6 +71,27 @@ else
     echo "     Try: modprobe uinput"
 fi
 
+# ── ELF interpreter ──────────────────────────────────────────────────────────
+echo ""
+echo "--- ELF Interpreter ---"
+INTERP="/lib/ld-linux-aarch64.so.1"
+if [ -f "${INTERP}" ] || [ -L "${INTERP}" ]; then
+    ok "ELF interpreter: ${INTERP}"
+else
+    ALT_INTERP=""
+    for p in /lib/aarch64-linux-gnu/ld-linux-aarch64.so.1 \
+              /usr/lib/ld-linux-aarch64.so.1 \
+              /usr/lib64/ld-linux-aarch64.so.1; do
+        if [ -f "${p}" ]; then ALT_INTERP="${p}"; break; fi
+    done
+    if [ -n "${ALT_INTERP}" ]; then
+        warn "ELF interpreter at ${ALT_INTERP} (not /lib/) — launcher will symlink"
+    else
+        fail "ELF interpreter ld-linux-aarch64.so.1 not found — sober will not start"
+        echo "     Try: ln -sf \$(find / -name ld-linux-aarch64.so.1 2>/dev/null | head -1) /lib/"
+    fi
+fi
+
 # ── Sober binary ─────────────────────────────────────────────────────────────
 echo ""
 echo "--- Sober Binary ---"
@@ -140,6 +161,15 @@ done
 if command -v eglinfo >/dev/null 2>&1; then
     VENDOR=$(eglinfo 2>/dev/null | grep "EGL vendor" | head -1)
     ok "EGL info: ${VENDOR:-unknown}"
+fi
+
+# GPU device nodes
+if ls /dev/dri/card* >/dev/null 2>&1; then
+    ok "GPU device: $(ls /dev/dri/card* | head -1)"
+elif ls /dev/mali* >/dev/null 2>&1; then
+    ok "Mali GPU device: $(ls /dev/mali* | head -1)"
+else
+    warn "/dev/dri/card* and /dev/mali* not found — GPU access may fail"
 fi
 
 # ── Audio ─────────────────────────────────────────────────────────────────────

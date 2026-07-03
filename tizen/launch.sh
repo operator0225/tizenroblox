@@ -18,6 +18,23 @@ mkdir -p "${INSTALL_DIR}/logs"
 exec >> "${LOG_FILE}" 2>&1
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] TizenRoblox starting..."
 
+# ── ELF interpreter check ────────────────────────────────────────────────────
+# Sober is built for /lib/ld-linux-aarch64.so.1. If Tizen has it elsewhere,
+# create a symlink so the kernel finds it.
+if [ ! -f "/lib/ld-linux-aarch64.so.1" ] && [ ! -L "/lib/ld-linux-aarch64.so.1" ]; then
+    for _interp in /lib/aarch64-linux-gnu/ld-linux-aarch64.so.1 \
+                   /usr/lib/ld-linux-aarch64.so.1 \
+                   /usr/lib64/ld-linux-aarch64.so.1; do
+        if [ -f "${_interp}" ]; then
+            echo "[launch] Symlinking ELF interpreter /lib/ld-linux-aarch64.so.1 → ${_interp}"
+            mkdir -p /lib
+            ln -sf "${_interp}" /lib/ld-linux-aarch64.so.1 2>/dev/null || \
+                echo "[launch] WARNING: could not create ELF interpreter symlink (need root)"
+            break
+        fi
+    done
+fi
+
 # ── Sanity checks ─────────────────────────────────────────────────────────────
 if [ ! -f "${SOBER_BIN}" ]; then
     echo "ERROR: sober binary not found at ${SOBER_BIN}"
@@ -206,6 +223,22 @@ SYSTEM_LIB_PATHS="/usr/lib/aarch64-linux-gnu:/usr/lib64:/usr/lib:/lib/aarch64-li
 export LD_LIBRARY_PATH="${LIB_DIR}:${INSTALL_DIR}/bin:${INSTALL_DIR}/bin/subprojects/mimalloc:${SYSTEM_LIB_PATHS}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
 echo "[launch] LD_LIBRARY_PATH=${LD_LIBRARY_PATH}"
+
+# ── GPU / EGL libraries ───────────────────────────────────────────────────────
+# Samsung Tizen TVs may put EGL/GLES in vendor-specific paths.
+# Prefer_system_lib for EGL so we always get the real HW driver.
+prefer_system_lib libEGL.so.1 \
+    /usr/lib/aarch64-linux-gnu/libEGL.so.1 \
+    /usr/lib64/libEGL.so.1 \
+    /usr/lib/libEGL.so.1 \
+    /usr/lib/aarch64-linux-gnu/mesa-egl/libEGL.so.1 \
+    /usr/lib/tizen/libEGL.so.1
+
+prefer_system_lib libGLESv2.so.2 \
+    /usr/lib/aarch64-linux-gnu/libGLESv2.so.2 \
+    /usr/lib64/libGLESv2.so.2 \
+    /usr/lib/libGLESv2.so.2 \
+    /usr/lib/tizen/libGLESv2.so.2
 
 # ── GPU / EGL environment ─────────────────────────────────────────────────────
 export EGL_PLATFORM="wayland"
