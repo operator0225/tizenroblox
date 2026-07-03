@@ -1,0 +1,21 @@
+# Build artifacts
+build/
+dist/
+
+# Extracted Sober Flatpak binaries (not redistributable)
+# Run scripts/extract_sober.sh to populate this directory from the .flatpak file
+sober_bundle/
+
+# Tizen package output
+*.tpk
+*.wgt
+
+# Logs
+*.log
+logs/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*~

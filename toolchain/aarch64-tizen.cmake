@@ -14,7 +14,8 @@ set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 
 # Tizen 9.0 target flags
-set(TIZEN_FLAGS "-march=armv8-a -mfpu=neon-fp-armv8 -ftree-vectorize")
+# Note: -mfpu is only for 32-bit ARM; on AArch64 NEON/FP is always present
+set(TIZEN_FLAGS "-march=armv8-a -ftree-vectorize")
 set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} ${TIZEN_FLAGS}")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TIZEN_FLAGS}")
 
