@@ -33,38 +33,51 @@ cmake --build "${BUILD_DIR}" --parallel "$(nproc)"
 
 # ── Assemble dist/ ────────────────────────────────────────────────────────────
 echo "[build] Assembling distribution package..."
-mkdir -p "${DIST_DIR}/bin"
+
+# Directory layout matching sober's RUNPATH ($ORIGIN/subprojects/mimalloc:$ORIGIN):
+#   dist/bin/sober                         <- main binary
+#   dist/bin/libloader.so                  <- found by $ORIGIN RUNPATH
+#   dist/bin/libbadcpu.so                  <- found by $ORIGIN RUNPATH
+#   dist/bin/subprojects/mimalloc/         <- found by $ORIGIN/subprojects/mimalloc
+#     libmimalloc.so.3
+#     libmimalloc.so -> libmimalloc.so.3
+#   dist/lib/                              <- found by LD_LIBRARY_PATH (stubs)
+
+mkdir -p "${DIST_DIR}/bin/subprojects/mimalloc"
 mkdir -p "${DIST_DIR}/lib"
 mkdir -p "${DIST_DIR}/data"
 mkdir -p "${DIST_DIR}/logs"
 
-# Copy compiled binaries + stubs
-cp -f "${BUILD_DIR}/dist/bin/input_mapper"    "${DIST_DIR}/bin/" 2>/dev/null || true
-cp -f "${BUILD_DIR}/dist/bin/launch.sh"        "${DIST_DIR}/bin/" 2>/dev/null || \
-    cp -f tizen/launch.sh                       "${DIST_DIR}/bin/"
+# Input mapper and launcher
+cp -f "${BUILD_DIR}/dist/bin/input_mapper" "${DIST_DIR}/bin/" 2>/dev/null || true
+cp -f tizen/launch.sh "${DIST_DIR}/bin/"
 chmod +x "${DIST_DIR}/bin/launch.sh"
 
-# Copy stub shared libraries (SONAME-versioned, preserve symlinks)
+# Stub shared libraries (LD_LIBRARY_PATH covers these)
 cp -a "${BUILD_DIR}/dist/lib/"*.so* "${DIST_DIR}/lib/" 2>/dev/null || true
 
-# Sober runtime binaries (real Flatpak binaries)
-cp -f sober_bundle/bin/sober              "${DIST_DIR}/bin/"
-# sober_services intentionally excluded (GTK4 not available on Tizen)
+# Sober runtime: main binary
+cp -f sober_bundle/bin/sober "${DIST_DIR}/bin/"
+# sober_services excluded (GTK4 not available on Tizen)
 
-# Sober's bundled libraries
-cp -f sober_bundle/libs/libloader.so      "${DIST_DIR}/lib/"
-cp -f sober_bundle/libs/libbadcpu.so      "${DIST_DIR}/lib/"
-cp -f sober_bundle/libs/libmimalloc.so.3  "${DIST_DIR}/lib/"
-# Create SONAME symlink for mimalloc
+# Sober's bundled libraries placed relative to sober binary (RUNPATH layout)
+cp -f sober_bundle/libs/libloader.so     "${DIST_DIR}/bin/"
+cp -f sober_bundle/libs/libbadcpu.so     "${DIST_DIR}/bin/"
+cp -f sober_bundle/libs/libmimalloc.so.3 "${DIST_DIR}/bin/subprojects/mimalloc/"
+(cd "${DIST_DIR}/bin/subprojects/mimalloc" && \
+    ln -sf libmimalloc.so.3 libmimalloc.so 2>/dev/null || true)
+
+# Also put them in lib/ as fallback (for LD_LIBRARY_PATH path)
+cp -f sober_bundle/libs/libloader.so     "${DIST_DIR}/lib/"
+cp -f sober_bundle/libs/libbadcpu.so     "${DIST_DIR}/lib/"
+cp -f sober_bundle/libs/libmimalloc.so.3 "${DIST_DIR}/lib/"
 ln -sf libmimalloc.so.3 "${DIST_DIR}/lib/libmimalloc.so" 2>/dev/null || true
-
-# ── Create SONAME symlinks for stubs ─────────────────────────────────────────
-(cd "${DIST_DIR}/lib" && {
-    [ -f libsecret-1.so.0 ]  || ln -sf libsecret-1.so.0.0.0 libsecret-1.so.0  2>/dev/null || true
-    [ -f libdecor-0.so.0 ]   || ln -sf libdecor-0.so.0.0.0  libdecor-0.so.0   2>/dev/null || true
-    [ -f libxml2.so.16 ]     || ln -sf libxml2.so.16.0.0     libxml2.so.16     2>/dev/null || true
-})
 
 echo "[build] Build complete!"
 echo "[build] Distribution at: ${DIST_DIR}"
-ls -lh "${DIST_DIR}/bin/" "${DIST_DIR}/lib/"
+echo ""
+echo "=== bin/ ==="
+ls -lh "${DIST_DIR}/bin/"
+echo ""
+echo "=== lib/ (stubs) ==="
+ls -lh "${DIST_DIR}/lib/"

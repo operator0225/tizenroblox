@@ -78,8 +78,12 @@ export XDG_CACHE_HOME="${SOBER_HOME}/.cache"
 # Order: our stubs first, then sober's bundled libs, then system libs
 SYSTEM_LIB_PATHS="/usr/lib/aarch64-linux-gnu:/usr/lib64:/usr/lib:/lib/aarch64-linux-gnu:/lib"
 
-# Build LD_LIBRARY_PATH
-export LD_LIBRARY_PATH="${LIB_DIR}:${INSTALL_DIR}/bin:${SYSTEM_LIB_PATHS}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+# Build LD_LIBRARY_PATH:
+#   1. Our stubs (lib/) - take priority for SONAME-shimmed libs
+#   2. sober's bundled libs (bin/) - libloader.so, libbadcpu.so
+#   3. mimalloc subdir - matches sober RUNPATH $ORIGIN/subprojects/mimalloc
+#   4. System libs
+export LD_LIBRARY_PATH="${LIB_DIR}:${INSTALL_DIR}/bin:${INSTALL_DIR}/bin/subprojects/mimalloc:${SYSTEM_LIB_PATHS}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
 echo "[launch] LD_LIBRARY_PATH=${LD_LIBRARY_PATH}"
 
