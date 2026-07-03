@@ -178,9 +178,9 @@ static int create_virtual_gamepad(void) {
         /* Fallback for older kernels */
         struct uinput_user_dev udev;
         memset(&udev, 0, sizeof(udev));
-        strncpy(udev.name, setup.name, UINPUT_MAX_NAME_SIZE - 1);
+        memcpy(udev.name, setup.name, UINPUT_MAX_NAME_SIZE - 1);
         udev.id = setup.id;
-        write(uinput_fd, &udev, sizeof(udev));
+        if (write(uinput_fd, &udev, sizeof(udev)) < 0) { /* best-effort */ }
     }
 
     if (ioctl(uinput_fd, UI_DEV_CREATE) < 0) {
@@ -200,7 +200,7 @@ static void emit_event(int type, int code, int value) {
     ev.type  = type;
     ev.code  = code;
     ev.value = value;
-    write(uinput_fd, &ev, sizeof(ev));
+    if (write(uinput_fd, &ev, sizeof(ev)) < 0) { /* best-effort */ }
 }
 
 static void emit_sync(void) {
@@ -215,7 +215,7 @@ static int find_samsung_remote(void) {
     if (!dir) return -1;
 
     struct dirent *ent;
-    char path[64];
+    char path[280];
     int found_fd = -1;
 
     while ((ent = readdir(dir)) != NULL) {
@@ -288,7 +288,7 @@ static int find_gamepads(int *fds, int max_fds) {
     while ((ent = readdir(dir)) != NULL && count < max_fds) {
         if (strncmp(ent->d_name, "event", 5) != 0) continue;
 
-        char path[64];
+        char path[280];
         snprintf(path, sizeof(path), "/dev/input/%s", ent->d_name);
         int fd = open(path, O_RDONLY | O_NONBLOCK);
         if (fd < 0) continue;

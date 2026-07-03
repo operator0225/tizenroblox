@@ -1,16 +1,18 @@
 /*
  * GLib / GObject minimal stub for Tizen TV
  *
- * Sober uses only 4 GLib symbols and 2 GObject symbols.
- * Tizen likely has GLib, but this shim ensures we always have them.
- * Tries to forward to the system GLib; falls back to no-ops.
- *
- * Symbols used by sober:
+ * Sober uses only 4 GLib symbols:
  *   GLib:    g_clear_error, g_str_has_prefix
  *   GObject: g_object_set, g_signal_connect_data
+ *
+ * Tries to delegate to the REAL system GLib via absolute paths (not SONAME)
+ * to avoid circular self-loading via LD_LIBRARY_PATH shadowing.
+ * Falls back to no-op/minimal implementations if the real library isn't found.
  */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,27 +24,44 @@ typedef void GObject;
 typedef unsigned long gulong;
 typedef int gboolean;
 
-static void *glib_handle   = NULL;
+static void *glib_handle    = NULL;
 static void *gobject_handle = NULL;
 
-static void   (*r_g_clear_error)(GError**) = NULL;
-static gboolean (*r_g_str_has_prefix)(const char*, const char*) = NULL;
-static void   (*r_g_object_set)(GObject*, const char*, ...) = NULL;
-static gulong (*r_g_signal_connect_data)(GObject*, const char*, void*, void*, void*, unsigned) = NULL;
+static void     (*r_g_clear_error)(GError**)                              = NULL;
+static gboolean (*r_g_str_has_prefix)(const char*, const char*)           = NULL;
+static void     (*r_g_object_set)(GObject*, const char*, ...)             = NULL;
+static gulong   (*r_g_signal_connect_data)(GObject*, const char*, void*,
+                                            void*, void*, unsigned)       = NULL;
+
+static void* try_open_real(const char *name) {
+    /* Use absolute paths to avoid re-loading ourselves via LD_LIBRARY_PATH */
+    char path[256];
+    static const char * const dirs[] = {
+        "/usr/lib/aarch64-linux-gnu",
+        "/usr/lib64",
+        "/usr/lib",
+        "/lib/aarch64-linux-gnu",
+        "/lib",
+        NULL
+    };
+    for (int i = 0; dirs[i]; i++) {
+        snprintf(path, sizeof(path), "%s/%s", dirs[i], name);
+        void *h = dlopen(path, RTLD_NOW | RTLD_GLOBAL);
+        if (h) return h;
+    }
+    return NULL;
+}
 
 __attribute__((constructor))
 static void glib_stub_init(void) {
-    glib_handle    = dlopen("libglib-2.0.so.0", RTLD_NOW | RTLD_GLOBAL);
-    gobject_handle = dlopen("libgobject-2.0.so.0", RTLD_NOW | RTLD_GLOBAL);
-
-    if (!glib_handle) glib_handle = dlopen("libglib-2.0.so", RTLD_NOW | RTLD_GLOBAL);
-    if (!gobject_handle) gobject_handle = dlopen("libgobject-2.0.so", RTLD_NOW | RTLD_GLOBAL);
+    glib_handle    = try_open_real("libglib-2.0.so.0");
+    gobject_handle = try_open_real("libgobject-2.0.so.0");
 
     if (glib_handle) {
         r_g_clear_error    = dlsym(glib_handle, "g_clear_error");
         r_g_str_has_prefix = dlsym(glib_handle, "g_str_has_prefix");
     } else {
-        fprintf(stderr, "[glib-stub] System GLib not found — using no-op stubs\n");
+        fprintf(stderr, "[glib-stub] System GLib not found — using built-in no-ops\n");
     }
 
     if (gobject_handle) {

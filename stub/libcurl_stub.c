@@ -10,7 +10,9 @@
  *   curl_easy_setopt, curl_easy_strerror, curl_slist_append, curl_slist_free_all
  */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -39,8 +41,9 @@ static void        (*r_curl_slist_free_all)(curl_slist*) = NULL;
 
 __attribute__((constructor))
 static void curl_stub_init(void) {
-    curl_handle = dlopen("libcurl.so.4", RTLD_NOW | RTLD_GLOBAL);
-    if (!curl_handle) curl_handle = dlopen("libcurl.so", RTLD_NOW | RTLD_GLOBAL);
+    curl_handle = dlopen("/usr/lib/aarch64-linux-gnu/libcurl.so.4", RTLD_NOW | RTLD_GLOBAL);
+    if (!curl_handle) curl_handle = dlopen("/usr/lib64/libcurl.so.4", RTLD_NOW | RTLD_GLOBAL);
+    if (!curl_handle) curl_handle = dlopen("/usr/lib/libcurl.so.4", RTLD_NOW | RTLD_GLOBAL);
 
     if (curl_handle) {
         fprintf(stderr, "[curl-stub] System libcurl loaded\n");

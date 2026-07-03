@@ -12,7 +12,9 @@
  *   FcPatternGetLangSet, FcPatternGetString
  */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -47,8 +49,9 @@ static FcResult   (*r_FcPatternGetString)(const FcPattern*, const char*, int, Fc
 
 __attribute__((constructor))
 static void fc_stub_init(void) {
-    fc_handle = dlopen("libfontconfig.so.1", RTLD_NOW | RTLD_GLOBAL);
-    if (!fc_handle) fc_handle = dlopen("libfontconfig.so", RTLD_NOW | RTLD_GLOBAL);
+    fc_handle = dlopen("/usr/lib/aarch64-linux-gnu/libfontconfig.so.1", RTLD_NOW | RTLD_GLOBAL);
+    if (!fc_handle) fc_handle = dlopen("/usr/lib64/libfontconfig.so.1", RTLD_NOW | RTLD_GLOBAL);
+    if (!fc_handle) fc_handle = dlopen("/usr/lib/libfontconfig.so.1", RTLD_NOW | RTLD_GLOBAL);
 
     if (fc_handle) {
         fprintf(stderr, "[fc-stub] System fontconfig loaded\n");

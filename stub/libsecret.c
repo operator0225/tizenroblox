@@ -52,6 +52,7 @@ gboolean secret_password_store_sync(const SecretSchema *schema,
                                      const char *password,
                                      GCancellable *cancellable,
                                      GError **error, ...) {
+    (void)schema; (void)collection; (void)label; (void)cancellable; (void)error;
     FILE *f = fopen(cred_path(), "w");
     if (!f) return 0;
     fprintf(f, "%s", password ? password : "");
@@ -63,12 +64,13 @@ gboolean secret_password_store_sync(const SecretSchema *schema,
 gchar* secret_password_lookup_sync(const SecretSchema *schema,
                                     GCancellable *cancellable,
                                     GError **error, ...) {
+    (void)schema; (void)cancellable; (void)error;
     FILE *f = fopen(cred_path(), "r");
     if (!f) return NULL;
     char buf[4096] = {0};
-    fread(buf, 1, sizeof(buf)-1, f);
+    size_t n = fread(buf, 1, sizeof(buf)-1, f);
     fclose(f);
-    if (buf[0] == '\0') return NULL;
+    if (n == 0 || buf[0] == '\0') return NULL;
     return strdup(buf);
 }
 
@@ -76,6 +78,7 @@ gchar* secret_password_lookup_sync(const SecretSchema *schema,
 gboolean secret_password_clear_sync(const SecretSchema *schema,
                                      GCancellable *cancellable,
                                      GError **error, ...) {
+    (void)schema; (void)cancellable; (void)error;
     remove(cred_path());
     return 1;
 }
@@ -96,6 +99,7 @@ void secret_password_wipe(gchar *password) {
 
 /* SecretService stubs */
 SecretService* secret_service_get_sync(int flags, GCancellable *cancel, GError **err) {
+    (void)flags; (void)cancel; (void)err;
     return NULL;
 }
 

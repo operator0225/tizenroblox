@@ -12,7 +12,9 @@
  *   FT_New_Size, FT_Render_Glyph, FT_Request_Size, FT_Select_Charmap
  */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -53,8 +55,9 @@ static void     (*r_FT_GlyphSlot_Oblique)(FT_GlyphSlot)   = NULL;
 
 __attribute__((constructor))
 static void ft_stub_init(void) {
-    ft_handle = dlopen("libfreetype.so.6", RTLD_NOW | RTLD_GLOBAL);
-    if (!ft_handle) ft_handle = dlopen("libfreetype.so", RTLD_NOW | RTLD_GLOBAL);
+    ft_handle = dlopen("/usr/lib/aarch64-linux-gnu/libfreetype.so.6", RTLD_NOW | RTLD_GLOBAL);
+    if (!ft_handle) ft_handle = dlopen("/usr/lib64/libfreetype.so.6", RTLD_NOW | RTLD_GLOBAL);
+    if (!ft_handle) ft_handle = dlopen("/usr/lib/libfreetype.so.6", RTLD_NOW | RTLD_GLOBAL);
 
     if (ft_handle) {
         fprintf(stderr, "[ft-stub] System FreeType loaded\n");
@@ -72,14 +75,6 @@ static void ft_stub_init(void) {
     }
 }
 
-/* Minimal allocator vtable stub for FT_New_Library when system not present */
-static int ft_alloc_stub(void *memory, long size, void **block)
-    { *block = malloc(size); return *block ? 0 : 6; }
-static int ft_realloc_stub(void *memory, long cur, long new_sz, void **block)
-    { *block = realloc(*block, new_sz); return *block ? 0 : 6; }
-static void ft_free_stub(void *memory, void *block)
-    { free(block); }
-
 /* ── Exports ──────────────────────────────────────────────────────────────── */
 
 FT_Error FT_New_Library(void *memory, FT_Library *alibrary) {
@@ -93,7 +88,9 @@ void FT_Add_Default_Modules(FT_Library library)
     { if (r_FT_Add_Default_Modules) r_FT_Add_Default_Modules(library); }
 void FT_Library_Version(FT_Library library, int *amajor, int *aminor, int *apatch) {
     if (r_FT_Library_Version) { r_FT_Library_Version(library, amajor, aminor, apatch); return; }
-    if (amajor) *amajor = 2; if (aminor) *aminor = 13; if (apatch) *apatch = 0;
+    if (amajor) *amajor = 2;
+    if (aminor) *aminor = 13;
+    if (apatch) *apatch = 0;
 }
 FT_Error FT_New_Memory_Face(FT_Library library, const unsigned char *file_base,
     long file_size, long face_index, FT_Face *aface) {
