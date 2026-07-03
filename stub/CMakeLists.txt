@@ -54,6 +54,10 @@ add_stub(freetype-stub "freetype" 6 "6.0.0" libfreetype_stub.c)
 # ── libcurl.so.4 ─────────────────────────────────────────────────────────────
 # libcurl shim for HTTP (Roblox API / asset downloads)
 add_stub(curl-stub "curl" 4 "4.0.0" libcurl_stub.c)
+# ── libdbus-1.so.3 ──────────────────────────────────────────────────────────────
+# D-Bus shim for session IPC — delegates to system libdbus-1.so.3
+add_stub(dbus-stub "dbus-1" 3 "3.0.0" libdbus_stub.c)
+
 
 # ── libwayland-client.so.0 / libwayland-egl.so.1 / libwayland-cursor.so.0 ───
 # Last-resort fallback stubs; normally the launcher creates symlinks to the
@@ -73,7 +77,7 @@ install(TARGETS
     secret-1 decor-0 xml2-compat crypto3-compat
     gstreamer-stub gstapp-stub gstvideo-stub
     glib-stub gobject-stub
-    fontconfig-stub freetype-stub curl-stub
+    fontconfig-stub freetype-stub curl-stub dbus-stub
     ${WAYLAND_STUB_TARGETS}
     LIBRARY DESTINATION ${CMAKE_BINARY_DIR}/dist/lib
 )

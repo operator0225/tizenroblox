@@ -177,6 +177,15 @@ if [ ! -f "${LIB_DIR}/libxml2.so.16" ]; then
     done
 fi
 
+# ── D-Bus ─────────────────────────────────────────────────────────────────────
+# Our libdbus_stub.so handles loading but pre-symlinking speeds up cold start
+try_symlink_lib libdbus-1.so.3 \
+    /usr/lib/aarch64-linux-gnu/libdbus-1.so.3 \
+    /usr/lib64/libdbus-1.so.3 \
+    /usr/lib/libdbus-1.so.3 \
+    /lib/aarch64-linux-gnu/libdbus-1.so.3 \
+    /usr/lib/tizen/libdbus-1.so.3
+
 # ── GLib/GObject stubs ────────────────────────────────────────────────────────
 for lib in libglib-2.0.so.0 libgobject-2.0.so.0; do
     if ! /sbin/ldconfig -p 2>/dev/null | grep -q "${lib}" && \
@@ -221,6 +230,22 @@ for cpu_gov in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
     echo "performance" > "${cpu_gov}" 2>/dev/null || true
 done
 
+# ── NQ4 AI Gen3 SoC performance tuning ───────────────────────────────────────
+# ARM big.LITTLE — keep Roblox on the big cores (A78-class)
+# Tizen may use cpuset cgroups; try both interfaces
+if [ -d /dev/cpuset/foreground ]; then
+    echo $$ > /dev/cpuset/foreground/tasks 2>/dev/null || true
+fi
+
+# mimalloc: reduce lock contention on 8-thread SoC
+export MIMALLOC_LARGE_OS_PAGES=1
+export MIMALLOC_PAGE_RESET=0
+
+# SDL2: single GL context swap interval = 1 for 60fps cap (OLED handles it)
+export SDL_HINT_RENDER_VSYNC=1
+# SDL2 video thread priority
+export SDL_HINT_THREAD_PRIORITY_POLICY=2
+
 # ── Sober-specific environment ────────────────────────────────────────────────
 export SOBER_DISPLAY_MODE="fullscreen"
 export SOBER_DISABLE_SERVICES="1"
@@ -261,10 +286,51 @@ else
     echo "WARNING: input_mapper not found at ${INPUT_MAPPER} — gamepad won't work"
 fi
 
-# ── Launch Sober ─────────────────────────────────────────────────────────────
+# ── Launch Sober (with crash recovery) ───────────────────────────────────────
 echo "$$" > "${PID_FILE}"
 echo "[launch] Launching Sober runtime..."
 echo "[launch] Binary: ${SOBER_BIN}"
 
 SOBER_ARGS="${@}"
-exec "${SOBER_BIN}" ${SOBER_ARGS}
+
+# Auto-restart on crash, up to MAX_RESTARTS times within RESTART_WINDOW seconds.
+# Deliberate exit (code 0) or user signal breaks the loop immediately.
+MAX_RESTARTS=3
+RESTART_WINDOW=60
+_restart_count=0
+_window_start=$(date +%s)
+_STOP_RESTART=0
+
+_sober_stopped() {
+    _STOP_RESTART=1
+}
+trap '_sober_stopped' USR1
+
+while [ "${_STOP_RESTART}" -eq 0 ]; do
+    "${SOBER_BIN}" ${SOBER_ARGS}
+    EXIT_CODE=$?
+
+    # Clean exit or SIGTERM/SIGINT — don't restart
+    if [ "${EXIT_CODE}" -eq 0 ] || [ "${EXIT_CODE}" -eq 130 ] || [ "${EXIT_CODE}" -eq 143 ]; then
+        echo "[launch] Sober exited cleanly (code ${EXIT_CODE})"
+        break
+    fi
+
+    echo "[launch] Sober crashed (code ${EXIT_CODE})"
+
+    # Reset restart counter if outside window
+    _now=$(date +%s)
+    if [ $((_now - _window_start)) -gt "${RESTART_WINDOW}" ]; then
+        _restart_count=0
+        _window_start="${_now}"
+    fi
+
+    _restart_count=$((_restart_count + 1))
+    if [ "${_restart_count}" -gt "${MAX_RESTARTS}" ]; then
+        echo "[launch] Too many crashes (${MAX_RESTARTS} in ${RESTART_WINDOW}s) — giving up"
+        break
+    fi
+
+    echo "[launch] Restarting (attempt ${_restart_count}/${MAX_RESTARTS})..."
+    sleep 2
+done

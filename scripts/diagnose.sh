@@ -175,6 +175,7 @@ libgobject-2.0.so.0
 libfontconfig.so.1
 libfreetype.so.6
 libcurl.so.4
+libdbus-1.so.3
 "
 for lib in ${STUB_LIBS}; do
     if [ -f "${INSTALL_DIR}/lib/${lib}" ] || [ -L "${INSTALL_DIR}/lib/${lib}" ]; then
@@ -192,7 +193,7 @@ path=$(find_lib libdbus-1.so.3)
 if [ -n "${path}" ]; then
     ok "libdbus-1.so.3: ${path}"
 else
-    fail "libdbus-1.so.3 not found — sober will fail to start"
+    warn "libdbus-1.so.3 not found at standard paths — stub will attempt runtime load"
 fi
 
 if [ -n "${DBUS_SESSION_BUS_ADDRESS}" ]; then

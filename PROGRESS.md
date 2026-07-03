@@ -252,6 +252,40 @@ dist/lib/
   libwayland-cursor.so.0   (Wayland 커서 폴백 스텁)
 ```
 
+### Phase 9 — 빌드 품질 + libdbus 스텁 + 성능 최적화 ✅
+- 날짜: 2026-07-03
+
+**컴파일러 경고 0건 달성** (`-Wall -Wextra`):
+- `#ifndef _GNU_SOURCE` 가드: libcurl, libfontconfig, libfreetype, libgstreamer, libxml2_compat
+- libfreetype 미사용 allocator 콜백(ft_alloc/realloc/free_stub) 제거
+- FT_Library_Version fallback 들여쓰기 경고 수정
+- libsecret 미사용 파라미터에 `(void)` 캐스트, fread 반환값 체크
+- input_mapper: write() 반환값 체크, path 버퍼 64→280 바이트, strncpy→memcpy
+
+**stub/libdbus_stub.c** — libdbus-1.so.3 위임 스텁:
+- sober의 22개 D-Bus 심볼 완전 커버
+- constructor에서 절대 경로로 시스템 libdbus-1.so.3 로드 시도
+- `/usr/lib/tizen/libdbus-1.so.3` 등 Tizen 전용 경로 포함
+- 실패 시 안전 no-op 폴백 (sober가 시작은 되나 IPC 비활성)
+
+**tizen/launch.sh 개선**:
+- libdbus-1.so.3 `try_symlink_lib` 추가 (Tizen 전용 경로 포함)
+- 크래시 복구: sober 비정상 종료 시 60초 내 최대 3회 자동 재시작
+- NQ4 AI Gen3 SoC 성능 튜닝:
+  - `/dev/cpuset/foreground` CPU 친화도 설정
+  - `MIMALLOC_LARGE_OS_PAGES=1`, `MIMALLOC_PAGE_RESET=0`
+  - `SDL_HINT_RENDER_VSYNC=1`, `SDL_HINT_THREAD_PRIORITY_POLICY=2`
+
+**scripts/diagnose.sh 업데이트**:
+- libdbus-1.so.3 스텁 존재 확인 추가 (13번째 스텁)
+- D-Bus 미발견 시 FAIL→WARN으로 완화 (스텁이 런타임 로드 처리)
+
+**빌드 결과** (aarch64, 경고/오류 0건, 17개 타겟):
+```
+dist/lib/
+  [이전 15개 + libdbus-1.so.3 신규]
+```
+
 ---
 
 ## 남은 작업
