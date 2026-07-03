@@ -41,14 +41,23 @@ typedef void (*wl_dispatcher_func_t)(void*, void*, unsigned int, void*);
 /* ── wl_display ──────────────────────────────────────────────────────────── */
 wl_display* wl_display_connect(const char *name)
 {
-    /* Try to load the real library */
-    void *h = dlopen("libwayland-client.so.0", RTLD_LAZY | RTLD_LOCAL);
+    /* Try absolute paths to avoid loading ourselves via SONAME */
+    static const char * const paths[] = {
+        "/usr/lib/aarch64-linux-gnu/libwayland-client.so.0",
+        "/usr/lib64/libwayland-client.so.0",
+        "/usr/lib/libwayland-client.so.0",
+        "/lib/aarch64-linux-gnu/libwayland-client.so.0",
+        NULL
+    };
+    void *h = NULL;
+    for (int i = 0; paths[i] && !h; i++)
+        h = dlopen(paths[i], RTLD_LAZY | RTLD_LOCAL);
+
     if (!h) {
-        fprintf(stderr, "[wayland-stub] libwayland-client.so.0 not found — "
-                "no display available\n");
+        fprintf(stderr, "[wayland-stub] Real libwayland-client not found at "
+                "any system path — Wayland display unavailable\n");
         return NULL;
     }
-    /* Forward to real implementation */
     typedef wl_display* (*fn_t)(const char*);
     fn_t real_fn = (fn_t)dlsym(h, "wl_display_connect");
     if (real_fn) return real_fn(name);

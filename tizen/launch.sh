@@ -74,15 +74,16 @@ export XDG_DATA_HOME="${SOBER_HOME}/.local/share"
 export XDG_CONFIG_HOME="${SOBER_HOME}/.config"
 export XDG_CACHE_HOME="${SOBER_HOME}/.cache"
 
-# ── Library symlink helper ────────────────────────────────────────────────────
-# Searches system paths for a library and creates a symlink in our lib/ dir.
-# This makes SDL2 feature probes succeed for libraries Tizen provides under
-# non-standard search paths (wayland, audio, xkb, etc.).
+# ── Library symlink helpers ───────────────────────────────────────────────────
+
+# try_symlink_lib SONAME path1 [path2...]
+# Creates a symlink in lib/ only if it doesn't already exist there.
+# Used for libraries Tizen has but not in the linker's default search path.
 try_symlink_lib() {
     local SONAME="$1"
     shift
     if [ -f "${LIB_DIR}/${SONAME}" ] || [ -L "${LIB_DIR}/${SONAME}" ]; then
-        return 0  # already present (our stub or symlink)
+        return 0  # already present (our stub or a previously-created symlink)
     fi
     for candidate in "$@"; do
         if [ -f "${candidate}" ]; then
@@ -95,25 +96,43 @@ try_symlink_lib() {
     return 1
 }
 
+# prefer_system_lib SONAME path1 [path2...]
+# ALWAYS replaces whatever is in lib/ with a symlink to the real system lib.
+# Used for Wayland client libraries where using the real compositor-specific
+# library is critical — our fallback stubs cannot connect to the compositor.
+prefer_system_lib() {
+    local SONAME="$1"
+    shift
+    for candidate in "$@"; do
+        if [ -f "${candidate}" ]; then
+            echo "[launch] Using system ${SONAME} → ${candidate}"
+            ln -sf "${candidate}" "${LIB_DIR}/${SONAME}" 2>/dev/null || true
+            return 0
+        fi
+    done
+    echo "[launch] WARNING: ${SONAME} not found — using built-in stub (display may not work)"
+    return 1
+}
+
 # ── Wayland client libraries ──────────────────────────────────────────────────
-# SDL2 (embedded in sober) probes these dynamically; without them there is no
-# Wayland video backend and sober will have no display output.
-# Tizen 9.0 TV uses Enlightenment/Wayland so these must exist somewhere.
-try_symlink_lib libwayland-client.so.0 \
+# CRITICAL: SDL2 needs the REAL libwayland-client from Tizen's compositor stack
+# to connect to Enlightenment. Our fallback stub can't do this. prefer_system_lib
+# always replaces our stub symlink with the real system library when found.
+prefer_system_lib libwayland-client.so.0 \
     /usr/lib/aarch64-linux-gnu/libwayland-client.so.0 \
     /usr/lib64/libwayland-client.so.0 \
     /usr/lib/libwayland-client.so.0 \
     /lib/aarch64-linux-gnu/libwayland-client.so.0 \
     /lib64/libwayland-client.so.0
 
-try_symlink_lib libwayland-egl.so.1 \
+prefer_system_lib libwayland-egl.so.1 \
     /usr/lib/aarch64-linux-gnu/libwayland-egl.so.1 \
     /usr/lib64/libwayland-egl.so.1 \
     /usr/lib/libwayland-egl.so.1 \
     /lib/aarch64-linux-gnu/libwayland-egl.so.1 \
     /usr/lib/aarch64-linux-gnu/mesa-egl/libwayland-egl.so.1
 
-try_symlink_lib libwayland-cursor.so.0 \
+prefer_system_lib libwayland-cursor.so.0 \
     /usr/lib/aarch64-linux-gnu/libwayland-cursor.so.0 \
     /usr/lib64/libwayland-cursor.so.0 \
     /usr/lib/libwayland-cursor.so.0
