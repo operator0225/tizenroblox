@@ -151,5 +151,24 @@ if [ ! -f "${PREFIX}/lib/libcrypto.a" ]; then
     make install_dev
 fi
 
-echo "[thirdparty] zlib + OpenSSL ready. Remaining libs: curl, libxml2, libffi,"
+# ── curl (static) ─────────────────────────────────────────────────────────
+if [ ! -f "${PREFIX}/lib/libcurl.a" ]; then
+    echo "[thirdparty] Building curl..."
+    cd "${SRC_DIR}/curl-8.10.1"
+    # --disable-symbol-hiding: curl defaults to -fvisibility=hidden even for
+    # static builds, which would make curl_easy_* etc invisible once
+    # whole-archived into our shared object.
+    ./configure --host="${HOST}" --prefix="${PREFIX}" \
+        --with-openssl="${PREFIX}" --with-zlib="${PREFIX}" \
+        --disable-shared --enable-static --disable-symbol-hiding \
+        --disable-ldap --disable-ldaps \
+        --without-libpsl --without-libidn2 --without-brotli --without-zstd \
+        --without-nghttp2 \
+        CC="${CC}" AR="${AR}" RANLIB="${RANLIB}" CFLAGS="-O2 -fPIC"
+    make -j"$(nproc)"
+    degrade_isoc23_symbols lib/.libs/libcurl.a
+    make install
+fi
+
+echo "[thirdparty] zlib + OpenSSL + curl ready. Remaining libs: libxml2, libffi,"
 echo "[thirdparty] pcre2, glib, freetype, expat, fontconfig — see PROGRESS.md Phase 12."

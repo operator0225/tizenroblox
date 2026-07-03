@@ -63,8 +63,13 @@ add_stub(fontconfig-stub "fontconfig" 1 "1.0.0" libfontconfig_stub.c)
 add_stub(freetype-stub "freetype" 6 "6.0.0" libfreetype_stub.c)
 
 # ── libcurl.so.4 ─────────────────────────────────────────────────────────────
-# libcurl shim for HTTP (Roblox API / asset downloads)
+# Real curl 8.10.1, statically bundled against our OpenSSL+zlib
 add_stub(curl-stub "curl" 4 "4.0.0" libcurl_stub.c)
+target_link_options(curl-stub PRIVATE
+    "-Wl,--whole-archive" "${THIRDPARTY_PREFIX}/lib/libcurl.a" "-Wl,--no-whole-archive")
+target_link_libraries(curl-stub PRIVATE
+    "${THIRDPARTY_PREFIX}/lib/libssl.a" "${THIRDPARTY_PREFIX}/lib/libcrypto.a"
+    "${THIRDPARTY_PREFIX}/lib/libz.a" pthread)
 # ── libdbus-1.so.3 ──────────────────────────────────────────────────────────────
 # D-Bus shim for session IPC — delegates to system libdbus-1.so.3
 add_stub(dbus-stub "dbus-1" 3 "3.0.0" libdbus_stub.c)
