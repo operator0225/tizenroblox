@@ -2,6 +2,10 @@
 build/
 dist/
 
+# Third-party library sources/build (cross-compiled OpenSSL, curl, glib, etc.)
+# Re-fetched and rebuilt by scripts/build_thirdparty.sh — not redistributable/too large for git
+thirdparty/
+
 # Extracted Sober Flatpak binaries (not redistributable)
 # Run scripts/extract_sober.sh to populate this directory from the .flatpak file
 sober_bundle/

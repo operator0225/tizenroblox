@@ -1,5 +1,13 @@
 cmake_minimum_required(VERSION 3.16)
 
+# ── Third-party static libraries ────────────────────────────────────────────
+# Cross-compiled by scripts/build_thirdparty.sh (OpenSSL, curl, libxml2,
+# glib/gobject, freetype, fontconfig + small deps). Statically linked (whole
+# archive) into the corresponding stub .so below, so the shipped library IS
+# the real implementation — no dlopen, no system-path guessing, no version
+# mismatch risk. GPU/display libs are NOT here; see tizen/launch.sh instead.
+set(THIRDPARTY_PREFIX ${CMAKE_SOURCE_DIR}/thirdparty/install)
+
 # ── Helper macro ──────────────────────────────────────────────────────────────
 # add_stub(TARGET OUTPUT_NAME SOVERSION VERSION SOURCES...)
 macro(add_stub target outname soversion version)
@@ -29,8 +37,11 @@ target_link_libraries(decor-0 PRIVATE)   # no dl needed
 add_stub(xml2-compat "xml2" 16 "16.0.0" libxml2_compat.c)
 
 # ── libcrypto.so.3 ───────────────────────────────────────────────────────────
-# OpenSSL 3.x shim — forwards to system libcrypto.so.3 or libcrypto.so.1.1
+# Real OpenSSL 3.0.13, statically bundled (see thirdparty/ + build_thirdparty.sh)
 add_stub(crypto3-compat "crypto" 3 "3.0.0" libcrypto3_compat.c)
+target_link_options(crypto3-compat PRIVATE
+    "-Wl,--whole-archive" "${THIRDPARTY_PREFIX}/lib/libcrypto.a" "-Wl,--no-whole-archive")
+target_link_libraries(crypto3-compat PRIVATE pthread)
 
 # ── libgstreamer-1.0.so.0 + libgstapp + libgstvideo ─────────────────────────
 # GStreamer shim for Roblox video playback (covers all three libs in one .so)
