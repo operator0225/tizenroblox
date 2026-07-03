@@ -103,8 +103,12 @@ if command -v tizen >/dev/null 2>&1 && [ -n "${CERT_PROFILE}" ]; then
     echo "[pkg] ✅ Signed package: ./${OUTPUT_TPK}"
 else
     # Unsigned package (dev sideloading)
+    # -y: store symlinks as symlinks instead of dereferencing them.
+    # Without this, each libfoo.so -> libfoo.so.N -> libfoo.so.N.M.P SONAME
+    # symlink chain gets copied as 3 full duplicate files (observed: 77MB
+    # uncompressed instead of the true ~30MB, once per bundled library).
     echo "[pkg] Creating unsigned .tpk (ZIP format)..."
-    (cd "${APP_DIR}" && zip -r "../../${OUTPUT_TPK}" .)
+    (cd "${APP_DIR}" && zip -ry "../../${OUTPUT_TPK}" .)
     echo "[pkg] ✅ Unsigned package: ./${OUTPUT_TPK}"
     echo ""
     echo "NOTE: Unsigned packages require developer mode on TV."
