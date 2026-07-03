@@ -136,7 +136,27 @@ sober 바이너리 직접 의존성 (readelf -d):
 - sober_services (GTK4 UI) 우회
 - 종료 시 자동 정리 (cleanup trap)
 
-### Phase 6 — 빌드 시스템 완성 ✅
+### Phase 6 — 전체 의존성 커버리지 ✅
+- 날짜: 2026-07-03
+
+sober 바이너리의 모든 의존성에 대한 호환 shim 추가:
+
+| 라이브러리 | SONAME | 방법 | 상태 |
+|---|---|---|---|
+| libsecret-1 | .so.0 | 파일 기반 스텁 | ✅ |
+| libdecor-0 | .so.0 | 전체화면 no-op | ✅ |
+| libxml2 | .so.16 | dlopen → libxml2.so.2 | ✅ |
+| libcrypto | .so.3 | dlopen → OpenSSL 3.x 또는 1.1 | ✅ |
+| libgstreamer-1.0 | .so.0 | dlopen → 시스템 GST | ✅ |
+| libgstapp-1.0 | .so.0 | 동일 shim | ✅ |
+| libgstvideo-1.0 | .so.0 | 동일 shim | ✅ |
+| libglib-2.0 | .so.0 | dlopen → 시스템 GLib (4심볼) | ✅ |
+| libgobject-2.0 | .so.0 | 동일 shim | ✅ |
+| libfontconfig | .so.1 | dlopen → 시스템 FC | ✅ |
+| libfreetype | .so.6 | dlopen → 시스템 FT | ✅ |
+| libcurl | .so.4 | dlopen → 시스템 curl | ✅ |
+
+### Phase 7 — 빌드 시스템 완성 ✅
 - 날짜: 2026-07-03
 
 **CMakeLists.txt 업데이트**:
@@ -148,44 +168,64 @@ sober 바이너리 직접 의존성 (readelf -d):
 - `-mfpu=neon-fp-armv8` 제거 (32비트 ARM 전용 플래그, AArch64에서 오류)
 - AArch64는 NEON/FP가 기본 내장
 
-**scripts/build.sh** — 전체 빌드 스크립트
+**scripts/build.sh** — 전체 빌드 스크립트 (cross-compile + assemble)
 **scripts/deploy.sh** — TV SSH 배포 스크립트
+**scripts/deploy_sdb.sh** — TV SDB 배포 스크립트 (Tizen SDK 필요)
+**scripts/setup.sh** — 자격증명 설정 도우미 (GNOME keyring import / 수동 입력)
+**scripts/extract_sober.sh** — Flatpak에서 Sober 바이너리 추출
+**scripts/package_tpk.sh** — Tizen .tpk 패키지 생성
+**tizen/pkg/tizen-manifest.xml** — Tizen TV 앱 매니페스트
 
-**빌드 결과** (aarch64 크로스컴파일):
+**빌드 결과** (aarch64 크로스컴파일, 오류 없음):
 ```
-dist/
-├── bin/
-│   ├── sober           (6.7MB, ARM64 — Sober 실제 바이너리)
-│   ├── input_mapper    (71KB,  ARM64 — 크로스컴파일 완료)
-│   └── launch.sh       (7.6KB, 런처 스크립트)
-└── lib/
-    ├── libloader.so    (3.3MB — Sober Android ELF 로더)
-    ├── libbadcpu.so    (323KB — CPU 검증)
-    ├── libmimalloc.so.3 (216KB — 메모리 할당자)
-    ├── libsecret-1.so.0 (70KB — GNOME keyring 스텁)
-    ├── libdecor-0.so.0  (70KB — Wayland 데코레이션 스텁)
-    └── libxml2.so.16   (70KB — libxml2 호환 shim)
+dist/bin/
+  sober           (6.7MB — Sober ARM64 실제 바이너리)
+  input_mapper    (71KB  — Samsung Remote → 가상 게임패드)
+  launch.sh       (런처)
+
+dist/lib/
+  libloader.so         (3.3MB — Sober Android ELF 로더)
+  libbadcpu.so         (323KB — CPU 검증)
+  libmimalloc.so.3     (216KB — 메모리 할당자)
+  libsecret-1.so.0     (스텁)
+  libdecor-0.so.0      (스텁)
+  libxml2.so.16        (shim)
+  libcrypto.so.3       (shim)
+  libgstreamer-1.0.so.0 (shim)
+  libgstapp-1.0.so.0   (shim)
+  libgstvideo-1.0.so.0 (shim)
+  libglib-2.0.so.0     (shim)
+  libgobject-2.0.so.0  (shim)
+  libfontconfig.so.1   (shim)
+  libfreetype.so.6     (shim)
+  libcurl.so.4         (shim)
 ```
 
 ---
 
 ## 남은 작업
 
-### 단기 (TV 배포 전 필수)
-- [ ] Tizen TV에서 누락 라이브러리 확인
-  - libcrypto.so.3, libcurl.so.4, libglib-2.0.so.0, libgobject-2.0.so.0
-  - libfreetype.so.6, libfontconfig.so.1
-  - libgstreamer-1.0.so.0, libgstapp-1.0.so.0, libgstvideo-1.0.so.0
-- [ ] 누락 라이브러리 스텁 또는 패키지 번들링
-- [ ] TV SSH 접속 후 `scripts/deploy.sh <TV_IP>` 실행
-- [ ] Wayland EGL 초기화 확인 (TV GPU 드라이버 경로)
+### 단기 (TV 배포 전)
+- [ ] Sober Flatpak에서 바이너리 추출: `bash scripts/extract_sober.sh <flatpak>`
+- [ ] 빌드: `bash scripts/build.sh`
+- [ ] 자격증명 설정: `bash scripts/setup.sh`
+- [ ] TV 배포: `bash scripts/deploy.sh <TV_IP>` 또는 `bash scripts/deploy_sdb.sh <TV_IP>`
+- [ ] TV에서 실행: `ssh root@<TV_IP> /opt/tizenroblox/bin/launch.sh`
 - [ ] /dev/uinput 권한 확인 (root 또는 input 그룹 필요)
+- [ ] Wayland 소켓 경로 확인 (`/run/display/` vs `/tmp/.RTE/`)
 
-### 중기
-- [ ] Roblox 로그인 처리 (libsecret 파일 스텁으로 자격증명 저장)
-- [ ] GStreamer 비디오 파이프라인 테스트 (인게임 영상 재생)
-- [ ] 성능 프로파일링 (NQ4 AI Gen3 SoC, 4GB RAM 기준)
-- [ ] HDR / 4K 출력 설정
+### 중기 (기능 향상)
+- [ ] 실제 TV에서 Wayland EGL 초기화 테스트
+- [ ] 오디오 확인 (Tizen ALSA/PulseAudio 호환성)
+- [ ] GStreamer 비디오 파이프라인 테스트 (인게임 영상)
+- [ ] 성능 프로파일링 (NQ4 AI Gen3 SoC, 4-8GB RAM)
+- [ ] HDR10+ / 4K 출력 최적화
+
+### 장기 (완성도)
+- [ ] Tizen .tpk 서명 + Samsung 스토어 배포
+- [ ] 자동 Roblox 버전 업데이트
+- [ ] 멀티플레이어 네트워크 테스트
+- [ ] 게임패드 매핑 UI (Samsung OneRemote 설정)
 
 ### 장기
 - [ ] Tizen 앱 패키지화 (.tpk) — TV 런처에서 직접 실행

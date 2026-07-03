@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!--
+    Tizen TV App Manifest for TizenRoblox
+    Package: org.tizenroblox.app
+    Type: Native service app (runs in background, no windowing system dependency)
+
+    Requires Tizen platform certificate for:
+      - platform-level privileges (filesystem.write, externalstorage)
+      - /dev/uinput access (requires "http://tizen.org/privilege/inputgenerator")
+      - Network access (for Roblox API calls)
+
+    For development: sign with test certificate from Tizen Studio.
+    For production: apply for Samsung Tizen TV certificate.
+-->
+<manifest xmlns="http://tizen.org/ns/packages"
+          api-version="9.0"
+          package="org.tizenroblox.app"
+          version="0.1.0">
+
+    <label>TizenRoblox</label>
+    <description>Roblox on Samsung Tizen TV via Sober ARM64 runtime</description>
+    <author email="tizenroblox@example.com" href="">TizenRoblox</author>
+
+    <!-- Native service: runs Sober + input_mapper in background -->
+    <service-application appid="org.tizenroblox.app.launcher"
+                         exec="/opt/usr/apps/org.tizenroblox.app/bin/launch.sh"
+                         nodisplay="false"
+                         multiple="false"
+                         taskmanage="true"
+                         auto-restart="false"
+                         on-boot="false"
+                         type="shell">
+        <label>TizenRoblox</label>
+        <icon>tizenroblox.png</icon>
+        <metadata key="http://developer.samsung.com/tizen/metadata/sdk.launch.tv" value=""/>
+    </service-application>
+
+    <!-- Privileges required -->
+    <privileges>
+        <!-- Network access for Roblox API and asset downloads -->
+        <privilege>http://tizen.org/privilege/internet</privilege>
+        <privilege>http://tizen.org/privilege/network.get</privilege>
+
+        <!-- File system access for game data, credentials -->
+        <privilege>http://tizen.org/privilege/filesystem.read</privilege>
+        <privilege>http://tizen.org/privilege/filesystem.write</privilege>
+
+        <!-- Input device creation (/dev/uinput for virtual gamepad) -->
+        <privilege>http://tizen.org/privilege/inputgenerator</privilege>
+
+        <!-- Display / EGL -->
+        <privilege>http://tizen.org/privilege/display</privilege>
+
+        <!-- D-Bus (for libsecret and GLib messaging) -->
+        <privilege>http://tizen.org/privilege/systemsettings.admin</privilege>
+
+        <!-- Notification (optional, for Roblox notifications) -->
+        <!-- <privilege>http://tizen.org/privilege/notification</privilege> -->
+    </privileges>
+
+    <!-- App icon sizes for TV UI -->
+    <icon>tizenroblox-86x86.png</icon>
+
+    <!-- Allowed background categories -->
+    <background-category value="media"/>
+    <background-category value="download"/>
+
+    <!-- Data directory -->
+    <datacontrol access="ReadWrite" providerid="http://tizenroblox.org/datacontrol/provider/data"/>
+
+</manifest>
