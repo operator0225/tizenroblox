@@ -42,6 +42,8 @@ static void* try_open_real(const char *name) {
         "/usr/lib",
         "/lib/aarch64-linux-gnu",
         "/lib",
+        "/usr/lib/tizen",
+        "/opt/tizen/usr/lib",
         NULL
     };
     for (int i = 0; dirs[i]; i++) {

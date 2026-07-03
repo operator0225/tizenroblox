@@ -96,6 +96,7 @@ static void dbus_stub_init(void) {
         "/lib/aarch64-linux-gnu/libdbus-1.so.3",
         "/lib64/libdbus-1.so.3",
         "/usr/lib/tizen/libdbus-1.so.3",
+        "/opt/tizen/usr/lib/libdbus-1.so.3",
         NULL
     };
     for (int i = 0; paths[i] && !dbus_handle; i++)
