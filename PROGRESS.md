@@ -314,6 +314,33 @@ dist/lib/
 
 **빌드 결과**: 경고/오류 0건, 기존 17개 타겟 모두 정상 빌드
 
+### Phase 11 — libxml2 순환 dlopen 수정 + Tizen 경로 확장 + uinput 자동 로드 ✅
+- 날짜: 2026-07-03
+
+**libxml2_compat.c — 순환 dlopen 버그 수정**:
+- 문제: `dist/lib/libxml2.so` 심볼릭 링크가 LD_LIBRARY_PATH에 있어 `dlopen("libxml2.so")` 가 자기 자신을 로드
+- 결과: `real_xmlParseFile` 등 함수 포인터가 스텁 자신을 가리킴 → 무한 재귀 호출
+- **수정**: candidates에서 `"libxml2.so.2"`, `"libxml2.so"` 제거, 절대 경로만 사용
+- `/usr/lib/tizen/libxml2.so.2` Tizen 전용 경로 추가
+
+**Tizen 라이브러리 경로 확장**:
+- libfontconfig, libfreetype, libgstreamer(+app/video): `/usr/lib/tizen/` 경로 추가
+- libwayland-client/egl/cursor: `/usr/lib/tizen/`, `/opt/tizen/usr/lib/` 추가
+- libEGL, libGLESv2: `/usr/lib/tizen/`, `/opt/tizen/usr/lib/` 추가
+
+**Wayland 소켓 검색 강화**:
+- launch.sh + diagnose.sh 모두에서 `/run/enlightenment/`, `/run/user/0/` 추가
+- Tizen 9 Enlightenment 컴포지터 소켓 위치 커버
+
+**uinput 커널 모듈 자동 로드**:
+- launch.sh: `/dev/uinput` 없으면 `modprobe uinput` 자동 실행
+- 0.3초 대기 후 재확인, 여전히 없으면 WARN 출력 (가상 게임패드 비활성화)
+
+**최종 빌드 검증** (`-Wall -Wextra`):
+- 경고 0건 확인 (17개 타겟, 전체 클린 빌드)
+- libcrypto, libcurl, libxml2 순환 dlopen 버그 전부 수정 완료
+- 모든 위임 스텁이 절대 경로만 사용 확인
+
 ---
 
 ## 남은 작업
