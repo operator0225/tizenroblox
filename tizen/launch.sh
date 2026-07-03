@@ -74,24 +74,79 @@ export XDG_DATA_HOME="${SOBER_HOME}/.local/share"
 export XDG_CONFIG_HOME="${SOBER_HOME}/.config"
 export XDG_CACHE_HOME="${SOBER_HOME}/.cache"
 
-# ── Library path ──────────────────────────────────────────────────────────────
-# Order: our stubs first, then sober's bundled libs, then system libs
-SYSTEM_LIB_PATHS="/usr/lib/aarch64-linux-gnu:/usr/lib64:/usr/lib:/lib/aarch64-linux-gnu:/lib"
+# ── Library symlink helper ────────────────────────────────────────────────────
+# Searches system paths for a library and creates a symlink in our lib/ dir.
+# This makes SDL2 feature probes succeed for libraries Tizen provides under
+# non-standard search paths (wayland, audio, xkb, etc.).
+try_symlink_lib() {
+    local SONAME="$1"
+    shift
+    if [ -f "${LIB_DIR}/${SONAME}" ] || [ -L "${LIB_DIR}/${SONAME}" ]; then
+        return 0  # already present (our stub or symlink)
+    fi
+    for candidate in "$@"; do
+        if [ -f "${candidate}" ]; then
+            echo "[launch] Symlinking ${SONAME} → ${candidate}"
+            ln -sf "${candidate}" "${LIB_DIR}/${SONAME}" 2>/dev/null || true
+            return 0
+        fi
+    done
+    echo "[launch] WARNING: ${SONAME} not found on this TV"
+    return 1
+}
 
-# Build LD_LIBRARY_PATH:
-#   1. Our stubs (lib/) - take priority for SONAME-shimmed libs
-#   2. sober's bundled libs (bin/) - libloader.so, libbadcpu.so
-#   3. mimalloc subdir - matches sober RUNPATH $ORIGIN/subprojects/mimalloc
-#   4. System libs
-export LD_LIBRARY_PATH="${LIB_DIR}:${INSTALL_DIR}/bin:${INSTALL_DIR}/bin/subprojects/mimalloc:${SYSTEM_LIB_PATHS}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+# ── Wayland client libraries ──────────────────────────────────────────────────
+# SDL2 (embedded in sober) probes these dynamically; without them there is no
+# Wayland video backend and sober will have no display output.
+# Tizen 9.0 TV uses Enlightenment/Wayland so these must exist somewhere.
+try_symlink_lib libwayland-client.so.0 \
+    /usr/lib/aarch64-linux-gnu/libwayland-client.so.0 \
+    /usr/lib64/libwayland-client.so.0 \
+    /usr/lib/libwayland-client.so.0 \
+    /lib/aarch64-linux-gnu/libwayland-client.so.0 \
+    /lib64/libwayland-client.so.0
 
-echo "[launch] LD_LIBRARY_PATH=${LD_LIBRARY_PATH}"
+try_symlink_lib libwayland-egl.so.1 \
+    /usr/lib/aarch64-linux-gnu/libwayland-egl.so.1 \
+    /usr/lib64/libwayland-egl.so.1 \
+    /usr/lib/libwayland-egl.so.1 \
+    /lib/aarch64-linux-gnu/libwayland-egl.so.1 \
+    /usr/lib/aarch64-linux-gnu/mesa-egl/libwayland-egl.so.1
+
+try_symlink_lib libwayland-cursor.so.0 \
+    /usr/lib/aarch64-linux-gnu/libwayland-cursor.so.0 \
+    /usr/lib64/libwayland-cursor.so.0 \
+    /usr/lib/libwayland-cursor.so.0
+
+try_symlink_lib libxkbcommon.so.0 \
+    /usr/lib/aarch64-linux-gnu/libxkbcommon.so.0 \
+    /usr/lib64/libxkbcommon.so.0 \
+    /usr/lib/libxkbcommon.so.0
+
+# ── Audio libraries ───────────────────────────────────────────────────────────
+# ALSA (libasound): Samsung TVs typically use ALSA internally.
+# PulseAudio: Tizen may have its own audio system; try anyway.
+try_symlink_lib libasound.so.2 \
+    /usr/lib/aarch64-linux-gnu/libasound.so.2 \
+    /usr/lib64/libasound.so.2 \
+    /usr/lib/libasound.so.2
+
+try_symlink_lib libpulse.so.0 \
+    /usr/lib/aarch64-linux-gnu/libpulse.so.0 \
+    /usr/lib64/libpulse.so.0 \
+    /usr/lib/libpulse.so.0
+
+# ── udev for input device hotplug ────────────────────────────────────────────
+try_symlink_lib libudev.so.1 \
+    /usr/lib/aarch64-linux-gnu/libudev.so.1 \
+    /usr/lib64/libudev.so.1 \
+    /usr/lib/libudev.so.1 \
+    /lib/aarch64-linux-gnu/libudev.so.1
 
 # ── libxml2.so.16 compatibility ───────────────────────────────────────────────
 # Sober requires libxml2.so.16 (GNOME Platform 50 / libxml2 3.x SONAME)
 # Tizen may have libxml2.so.2 (2.x) — our shim bridges the gap
 if [ ! -f "${LIB_DIR}/libxml2.so.16" ]; then
-    # Try to find system libxml2 and create symlink
     for f in /usr/lib/aarch64-linux-gnu/libxml2.so.2 \
               /usr/lib64/libxml2.so.2 \
               /usr/lib/libxml2.so.2; do
@@ -104,7 +159,6 @@ if [ ! -f "${LIB_DIR}/libxml2.so.16" ]; then
 fi
 
 # ── GLib/GObject stubs ────────────────────────────────────────────────────────
-# Check if Tizen has GLib; if not, sober won't launch
 for lib in libglib-2.0.so.0 libgobject-2.0.so.0; do
     if ! /sbin/ldconfig -p 2>/dev/null | grep -q "${lib}" && \
        [ ! -f "${LIB_DIR}/${lib}" ]; then
@@ -112,27 +166,49 @@ for lib in libglib-2.0.so.0 libgobject-2.0.so.0; do
     fi
 done
 
-# ── GPU / EGL environment ─────────────────────────────────────────────────────
-# Force hardware EGL (no software fallback)
-export EGL_PLATFORM="wayland"
-export MESA_GL_VERSION_OVERRIDE=""
+# ── Library path ──────────────────────────────────────────────────────────────
+# Order: our stubs first, then sober's bundled libs, then system libs
+SYSTEM_LIB_PATHS="/usr/lib/aarch64-linux-gnu:/usr/lib64:/usr/lib:/lib/aarch64-linux-gnu:/lib"
 
-# Samsung NQ4 AI Gen3 GPU (Mali or custom)
-# Disable GPU debugging overhead
+# Build LD_LIBRARY_PATH:
+#   1. Our stubs/shims (lib/) — highest priority
+#   2. sober's bundled libs (bin/) — libloader.so, libbadcpu.so
+#   3. mimalloc subdir — matches sober RUNPATH $ORIGIN/subprojects/mimalloc
+#   4. System libs
+export LD_LIBRARY_PATH="${LIB_DIR}:${INSTALL_DIR}/bin:${INSTALL_DIR}/bin/subprojects/mimalloc:${SYSTEM_LIB_PATHS}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+echo "[launch] LD_LIBRARY_PATH=${LD_LIBRARY_PATH}"
+
+# ── GPU / EGL environment ─────────────────────────────────────────────────────
+export EGL_PLATFORM="wayland"
+
+# Samsung NQ4 AI Gen3 GPU — disable debug overhead, use hardware path
 export LIBGL_DEBUG=""
 export EGL_LOG_LEVEL="fatal"
 
-# ── Sober-specific environment ────────────────────────────────────────────────
-# Tell sober this is a TV environment
-export SOBER_DISPLAY_MODE="fullscreen"
-export SOBER_DISABLE_SERVICES="1"    # Skip GTK4 sober_services launcher
-export SOBER_SKIP_UPDATE_CHECK="1"   # No auto-update on TV
+# Shader cache: enable for faster subsequent launches
+export MESA_SHADER_CACHE_DISABLE="false"
+export __GL_SHADER_DISK_CACHE=1
+export __GL_SHADER_DISK_CACHE_PATH="${SOBER_HOME}/.cache/sober/gl_shaders"
+mkdir -p "${__GL_SHADER_DISK_CACHE_PATH}"
 
-# Roblox data directory
+# Wayland vsync: avoid tearing on 120Hz OLED panel
+export SDL_VIDEODRIVER="wayland"
+export SDL_AUDIODRIVER="${SDL_AUDIODRIVER:-alsa}"
+
+# ── CPU performance mode ──────────────────────────────────────────────────────
+# Request performance governor if available (Tizen may require root)
+for cpu_gov in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
+    echo "performance" > "${cpu_gov}" 2>/dev/null || true
+done
+
+# ── Sober-specific environment ────────────────────────────────────────────────
+export SOBER_DISPLAY_MODE="fullscreen"
+export SOBER_DISABLE_SERVICES="1"
+export SOBER_SKIP_UPDATE_CHECK="1"
 export SOBER_DATA_DIR="${SOBER_HOME}/.local/share/sober"
 
 # ── D-Bus ────────────────────────────────────────────────────────────────────
-# Start a D-Bus session if not present (sober needs it for libsecret)
 if [ -z "${DBUS_SESSION_BUS_ADDRESS}" ]; then
     if command -v dbus-launch >/dev/null 2>&1; then
         eval $(dbus-launch --sh-syntax 2>/dev/null) || true
@@ -142,7 +218,6 @@ fi
 # ── Input mapper ──────────────────────────────────────────────────────────────
 cleanup() {
     echo "[launch] Shutting down TizenRoblox..."
-    # Kill input mapper
     if [ -f "${INPUT_PID_FILE}" ]; then
         INPUT_PID=$(cat "${INPUT_PID_FILE}")
         kill "${INPUT_PID}" 2>/dev/null || true
@@ -161,7 +236,6 @@ if [ -f "${INPUT_MAPPER}" ]; then
     "${INPUT_MAPPER}" &
     INPUT_MAPPER_PID=$!
     echo "${INPUT_MAPPER_PID}" > "${INPUT_PID_FILE}"
-    # Give uinput device time to register
     sleep 0.5
     echo "[launch] Input mapper PID: ${INPUT_MAPPER_PID}"
 else
@@ -173,7 +247,5 @@ echo "$$" > "${PID_FILE}"
 echo "[launch] Launching Sober runtime..."
 echo "[launch] Binary: ${SOBER_BIN}"
 
-# Pass Roblox place ID or join args from environment/command line
 SOBER_ARGS="${@}"
-
 exec "${SOBER_BIN}" ${SOBER_ARGS}

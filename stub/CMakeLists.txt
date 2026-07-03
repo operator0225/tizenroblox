@@ -55,10 +55,25 @@ add_stub(freetype-stub "freetype" 6 "6.0.0" libfreetype_stub.c)
 # libcurl shim for HTTP (Roblox API / asset downloads)
 add_stub(curl-stub "curl" 4 "4.0.0" libcurl_stub.c)
 
+# ── libwayland-client.so.0 / libwayland-egl.so.1 / libwayland-cursor.so.0 ───
+# Last-resort fallback stubs; normally the launcher creates symlinks to the
+# real Tizen system libraries so SDL2 can connect to the Wayland compositor.
+# These stubs prevent hard crashes on systems where symlinks couldn't be made.
+option(WAYLAND_STUB "Build Wayland passthrough stubs" ON)
+if(WAYLAND_STUB)
+    add_stub(wayland-client-stub  "wayland-client"  0 "0.0.0" libwayland_stub.c)
+    add_stub(wayland-egl-stub     "wayland-egl"     1 "1.0.0" libwayland_stub.c)
+    add_stub(wayland-cursor-stub  "wayland-cursor"  0 "0.0.0" libwayland_stub.c)
+    set(WAYLAND_STUB_TARGETS wayland-client-stub wayland-egl-stub wayland-cursor-stub)
+else()
+    set(WAYLAND_STUB_TARGETS)
+endif()
+
 install(TARGETS
     secret-1 decor-0 xml2-compat crypto3-compat
     gstreamer-stub gstapp-stub gstvideo-stub
     glib-stub gobject-stub
     fontconfig-stub freetype-stub curl-stub
+    ${WAYLAND_STUB_TARGETS}
     LIBRARY DESTINATION ${CMAKE_BINARY_DIR}/dist/lib
 )

@@ -59,6 +59,24 @@ scp ${SCP_OPTS} "${DIST_DIR}/bin/sober"        "${TV_USER}@${TV_IP}:${INSTALL_DI
 scp ${SCP_OPTS} "${DIST_DIR}/bin/input_mapper" "${TV_USER}@${TV_IP}:${INSTALL_DIR}/bin/" 2>/dev/null || true
 scp ${SCP_OPTS} "${DIST_DIR}/bin/launch.sh"    "${TV_USER}@${TV_IP}:${INSTALL_DIR}/bin/"
 
+# Sober bundled libs (RUNPATH: $ORIGIN)
+for f in libloader.so libbadcpu.so; do
+    [ -f "${DIST_DIR}/bin/${f}" ] && \
+        scp ${SCP_OPTS} "${DIST_DIR}/bin/${f}" "${TV_USER}@${TV_IP}:${INSTALL_DIR}/bin/"
+done
+# mimalloc (RUNPATH: $ORIGIN/subprojects/mimalloc)
+if [ -f "${DIST_DIR}/bin/subprojects/mimalloc/libmimalloc.so.3" ]; then
+    ssh ${SSH_OPTS} "${TV_USER}@${TV_IP}" \
+        "mkdir -p ${INSTALL_DIR}/bin/subprojects/mimalloc"
+    scp ${SCP_OPTS} \
+        "${DIST_DIR}/bin/subprojects/mimalloc/libmimalloc.so.3" \
+        "${TV_USER}@${TV_IP}:${INSTALL_DIR}/bin/subprojects/mimalloc/"
+fi
+
+echo "[deploy] Copying scripts..."
+ssh ${SSH_OPTS} "${TV_USER}@${TV_IP}" "mkdir -p ${INSTALL_DIR}/scripts"
+scp ${SCP_OPTS} scripts/diagnose.sh "${TV_USER}@${TV_IP}:${INSTALL_DIR}/scripts/"
+
 echo "[deploy] Copying libraries..."
 scp ${SCP_OPTS} "${DIST_DIR}/lib/"*.so*  "${TV_USER}@${TV_IP}:${INSTALL_DIR}/lib/" 2>/dev/null || true
 
@@ -97,6 +115,13 @@ ssh ${SSH_OPTS} "${TV_USER}@${TV_IP}" "
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo " Deployment complete!"
-echo " To launch on TV:"
-echo "   ssh ${TV_USER}@${TV_IP} ${INSTALL_DIR}/bin/launch.sh"
+echo ""
+echo " 1. Run diagnostics:"
+echo "    ssh ${TV_USER}@${TV_IP} bash ${INSTALL_DIR}/scripts/diagnose.sh"
+echo ""
+echo " 2. Launch (if diagnostics pass):"
+echo "    ssh ${TV_USER}@${TV_IP} ${INSTALL_DIR}/bin/launch.sh"
+echo ""
+echo " 3. View logs:"
+echo "    ssh ${TV_USER}@${TV_IP} tail -f ${INSTALL_DIR}/logs/tizenroblox.log"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

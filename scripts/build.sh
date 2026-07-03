@@ -73,6 +73,11 @@ cp -f sober_bundle/libs/libbadcpu.so     "${DIST_DIR}/lib/"
 cp -f sober_bundle/libs/libmimalloc.so.3 "${DIST_DIR}/lib/"
 ln -sf libmimalloc.so.3 "${DIST_DIR}/lib/libmimalloc.so" 2>/dev/null || true
 
+# Diagnostic and deploy scripts
+cp -f scripts/diagnose.sh "${DIST_DIR}/scripts/" 2>/dev/null || \
+    (mkdir -p "${DIST_DIR}/scripts" && cp -f scripts/diagnose.sh "${DIST_DIR}/scripts/")
+chmod +x "${DIST_DIR}/scripts/diagnose.sh" 2>/dev/null || true
+
 echo "[build] Build complete!"
 echo "[build] Distribution at: ${DIST_DIR}"
 echo ""
@@ -81,3 +86,9 @@ ls -lh "${DIST_DIR}/bin/"
 echo ""
 echo "=== lib/ (stubs) ==="
 ls -lh "${DIST_DIR}/lib/"
+echo ""
+echo "Next steps:"
+echo "  1. Extract Sober: bash scripts/extract_sober.sh <your.flatpak>"
+echo "  2. Deploy to TV:  bash scripts/deploy.sh <TV_IP>"
+echo "  3. Diagnose:      ssh root@<TV_IP> bash /opt/tizenroblox/scripts/diagnose.sh"
+echo "  4. Launch:        ssh root@<TV_IP> /opt/tizenroblox/bin/launch.sh"
